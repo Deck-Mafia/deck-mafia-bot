@@ -1,9 +1,10 @@
 import { PrismaClient } from '@prisma/client';
-import { Client, Collection, Events, GatewayIntentBits } from 'discord.js';
+import { Client, Collection, Events, GatewayIntentBits, MessageCreateOptions, MessagePayload } from 'discord.js';
 import path from 'path';
 import config from './config';
 import fs from 'fs';
 import { commands, loadCommands, SlashCommand } from './structures/SlashCommand';
+import card from './commands/card';
 
 export const prisma = new PrismaClient();
 
@@ -29,6 +30,34 @@ client.on(Events.InteractionCreate, async (interaction) => {
 	} catch (error) {
 		console.error(error);
 		await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+	}
+});
+
+client.on(Events.InteractionCreate, async (i) => {
+	if (!i.isStringSelectMenu()) return;
+	if (i.customId === 'reveal-cards') {
+		const values = i.values;
+		let urls: string[] = [];
+		for (let i = 0; i < values.length; i++) {
+			const card = await prisma.ownedCard.findUnique({
+				where: {
+					id: values[i],
+				},
+				include: {
+					card: true,
+				},
+			});
+
+			if (card) urls.push(card.card.uri);
+		}
+
+		for (let index = 0; index < urls.length; index++) {
+			if (i.channel) {
+				i.channel.send({ content: `[${index + 1}/${urls.length}]<@${i.user.id}> has submitted\n${urls[index]}` });
+			}
+		}
+
+		i.reply({ content: 'Done', ephemeral: true });
 	}
 });
 

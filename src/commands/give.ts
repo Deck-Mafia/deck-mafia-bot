@@ -87,8 +87,8 @@ export default newSlashCommand({
 		const user = i.options.getUser('user', true);
 		let additionalCardNames: string[] = [];
 		for (let ind = 0; ind < amountOfCards; ind++) {
-			let result = i.options.get(`card_${ind + 1}`);
-
+			let name = `card_${ind + 1}`;
+			let result = i.options.get(name, false);
 			if (result) {
 				if (result.value) {
 					additionalCardNames.push(result.value as string);
@@ -100,7 +100,7 @@ export default newSlashCommand({
 			await i.reply({ content: `Adding \`${additionalCardNames.length + 1}\` cards to \`${user.username}\`` });
 			await fetchCardData(i, cardName, user);
 			for (let index = 0; index < additionalCardNames.length; index++) {
-				await fetchCardData(i, cardName, user);
+				await fetchCardData(i, additionalCardNames[index], user);
 			}
 		} catch (err) {
 			await i.reply({

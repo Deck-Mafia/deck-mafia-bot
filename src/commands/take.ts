@@ -46,7 +46,6 @@ async function removeCard(i: CommandInteraction, cardName: string, user: User) {
 	const fetchedCard = await prisma.card.findFirst({
 		where: {
 			name: cardName.toLowerCase(),
-			isPublic: true,
 		},
 	});
 

@@ -55,29 +55,19 @@ export default newSlashCommand({
 			const fetchedCard = await prisma.card.findFirst({
 				where: {
 					name: cardName.toLowerCase(),
-					isPublic: true,
 				},
 			});
 
 			if (!fetchedCard) {
 				const allPublicCardNames = await getAllCardNames();
 				const allCards: string[] = allPublicCardNames;
-				const privateCards = await getAllPrivateCards(i.user.id);
-				if (privateCards[cardName]) {
-					return sendCard(i, privateCards[cardName], ephemeral);
-				} else {
-					const privateKeys = Object.keys(privateCards);
-					privateKeys.forEach((key) => {
-						if (!allCards.includes(key)) allCards.push(key);
-					});
 
-					if (allCards.length > 0) {
-						const closestCardName = await getClosestCardName(cardName, allCards);
-						let message = `No card was found with that name, did you mean \`${closestCardName.bestMatch.target}\`?`;
-						return await i.reply({ content: message, ephemeral: true });
-					} else {
-						return await i.reply({ content: `No card was found with that name.`, ephemeral: true });
-					}
+				if (allCards.length > 0) {
+					const closestCardName = await getClosestCardName(cardName, allCards);
+					let message = `No card was found with that name, did you mean \`${closestCardName.bestMatch.target}\`?`;
+					return await i.reply({ content: message, ephemeral: true });
+				} else {
+					return await i.reply({ content: `No card was found with that name.`, ephemeral: true });
 				}
 			} else {
 				return sendCard(i, fetchedCard, ephemeral);

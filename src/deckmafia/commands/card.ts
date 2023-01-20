@@ -1,6 +1,6 @@
 import { CommandInteraction, SlashCommandBuilder } from 'discord.js';
-import { prisma } from '..';
-import { newSlashCommand, SlashCommand } from '../structures/SlashCommand';
+import { prisma } from '../..';
+import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 import string from 'string-similarity';
 import { Card } from '.prisma/client';
 import { send } from 'process';

@@ -1,12 +1,10 @@
 import { REST, Routes, Client, Collection, CommandInteraction, SlashCommandBuilder } from 'discord.js';
 import path from 'path';
 import fs from 'fs';
-import { client } from '..';
 import config from '../config';
 
-const rest = new REST({ version: '10' }).setToken(config.discordBotToken);
-
-export const commands: Collection<string, SlashCommand> = new Collection();
+export const deckMafiaCommands: Collection<string, SlashCommand> = new Collection();
+export const deiMilitesCommands: Collection<string, SlashCommand> = new Collection();
 
 export interface SlashCommand {
 	data: SlashCommandBuilder;
@@ -15,7 +13,7 @@ export interface SlashCommand {
 
 export async function newSlashCommand(cmd: SlashCommand) {
 	try {
-		commands.set(cmd.data.name, cmd);
+		deckMafiaCommands.set(cmd.data.name, cmd);
 		console.log(`Loaded [${cmd.data.name}]`);
 		return cmd;
 	} catch (err) {
@@ -23,8 +21,17 @@ export async function newSlashCommand(cmd: SlashCommand) {
 	}
 }
 
-export async function loadCommands() {
-	const commandsPath = path.join(__dirname, '..', 'commands');
+export async function newDeiMilitesCommand(cmd: SlashCommand) {
+	try {
+		deiMilitesCommands.set(cmd.data.name, cmd);
+		console.log(`Loaded [${cmd.data.name}]`);
+		return cmd;
+	} catch (err) {
+		console.error(`Failed to load [${cmd.data.name}]`);
+	}
+}
+
+export async function loadCommands(client: Client, commandsPath: string, rest: REST, clientId: string, commands: Collection<string, SlashCommand>) {
 	const commandFiles = fs.readdirSync(commandsPath).filter((file) => file.endsWith('.ts') || file.endsWith('.js'));
 	for (const file of commandFiles) {
 		try {
@@ -42,7 +49,7 @@ export async function loadCommands() {
 			list.push(val.data.toJSON());
 		});
 
-		const data = (await rest.put(Routes.applicationCommands(config.discordBotClientId), { body: list })) as any;
+		const data = (await rest.put(Routes.applicationCommands(clientId), { body: list })) as any;
 
 		console.log(`Successfully reloaded ${data.length} application (/) commands.`);
 	} catch (err) {

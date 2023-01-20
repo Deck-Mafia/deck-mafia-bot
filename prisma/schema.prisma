@@ -10,6 +10,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// DECK MAFIA
+
 model Card {
   id         String      @id @default(auto()) @map("_id") @db.ObjectId
   name       String      @unique
@@ -30,4 +32,68 @@ model Inventory {
   id         String      @id @default(auto()) @map("_id") @db.ObjectId
   discordId  String      @unique
   ownedCards OwnedCard[]
+}
+
+// DEI MILITES
+
+model DeiMilitesGame {
+  id             String             @id @default(auto()) @map("_id") @db.ObjectId
+  gameCategoryId String             @unique
+  players        DeiMilitesPlayer[]
+  currentTurn    Int                @default(1)
+}
+
+model DeiMilitesPlayer {
+  id            String             @id @default(auto()) @map("_id") @db.ObjectId
+  game          DeiMilitesGame     @relation(fields: [gameId], references: [id])
+  gameId        String             @db.ObjectId
+  health        Int                @default(35)
+  ownedElements OwnedElement[]
+  discordId     String
+  isDead        Boolean?
+  actions       DeiMilitesAction[]
+}
+
+model DeiMilitesAction {
+  id        String           @id @default(auto()) @map("_id") @db.ObjectId
+  type      String
+  data      String?
+  createdAt DateTime         @default(now())
+  author    DeiMilitesPlayer @relation(fields: [playerId], references: [id])
+  playerId  String           @db.ObjectId
+}
+
+model OwnedElement {
+  id        String           @id @default(auto()) @map("_id") @db.ObjectId
+  player    DeiMilitesPlayer @relation(fields: [playerId], references: [id])
+  element   Element          @relation(fields: [elementId], references: [id])
+  amount    Int
+  playerId  String           @db.ObjectId
+  elementId String           @db.ObjectId
+}
+
+model Element {
+  id              String         @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  ownedElements   OwnedElement[]
+  spellsCosts     SpellCost[]
+  spellAffinities Spells[]
+}
+
+model Spells {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  spellCost   SpellCost @relation(fields: [spellCostId], references: [id])
+  affinity    Element   @relation(fields: [elementId], references: [id])
+  name        String
+  spellCostId String    @db.ObjectId
+  elementId   String    @db.ObjectId
+}
+
+model SpellCost {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  element     Element  @relation(fields: [elementId], references: [id])
+  amount      Int
+  description String
+  elementId   String   @db.ObjectId
+  Spells      Spells[]
 }

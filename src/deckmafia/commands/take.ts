@@ -1,6 +1,6 @@
 import { CommandInteraction, SlashCommandBuilder, User } from 'discord.js';
-import { prisma } from '..';
-import { newSlashCommand, SlashCommand } from '../structures/SlashCommand';
+import { prisma } from '../..';
+import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 import string from 'string-similarity';
 
 const amountOfCards = 19;

@@ -1,6 +1,6 @@
 import { CommandInteraction, SlashCommandBuilder } from 'discord.js';
-import { prisma } from '..';
-import { newSlashCommand, SlashCommand } from '../structures/SlashCommand';
+import { prisma } from '../..';
+import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 
 const c = new SlashCommandBuilder();
 c.setName('add');

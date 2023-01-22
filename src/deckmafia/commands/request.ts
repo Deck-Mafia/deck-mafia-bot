@@ -4,8 +4,8 @@ import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 import string from 'string-similarity';
 
 const c = new SlashCommandBuilder();
-c.setName('reveal');
-c.setDescription('Reveal any amount of cards that you own.');
+c.setName('submit');
+c.setDescription('Submit any amount of cards that you own.');
 
 export default newSlashCommand({
 	data: c,

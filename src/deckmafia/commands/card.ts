@@ -6,7 +6,7 @@ import { Card } from '.prisma/client';
 import { send } from 'process';
 
 const c = new SlashCommandBuilder();
-c.setName('card');
+c.setName('view');
 c.setDescription('View a public card');
 c.addStringOption((o) => o.setName('name').setDescription('Name of the card').setRequired(true));
 c.addBooleanOption((i) => i.setName('hidden').setDescription('Do you wanna make this only visible to you? Default is no').setRequired(true));

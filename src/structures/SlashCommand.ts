@@ -1,4 +1,4 @@
-import { REST, Routes, Client, Collection, CommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { REST, Routes, Client, Collection, CommandInteraction, SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import path from 'path';
 import fs from 'fs';
 import config from '../config';
@@ -8,7 +8,7 @@ export const deiMilitesCommands: Collection<string, SlashCommand> = new Collecti
 
 export interface SlashCommand {
 	data: SlashCommandBuilder;
-	execute: (i: CommandInteraction) => any | Promise<any>;
+	execute: (i: ChatInputCommandInteraction) => any | Promise<any>;
 }
 
 export async function newSlashCommand(cmd: SlashCommand) {

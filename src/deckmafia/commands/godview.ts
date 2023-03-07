@@ -1,4 +1,4 @@
-import { CommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { ChatInputCommandInteraction, CommandInteraction, SlashCommandBuilder } from 'discord.js';
 import { prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 import string from 'string-similarity';
@@ -48,7 +48,7 @@ async function getAllPrivateCards(discordId: string) {
 
 export default newSlashCommand({
 	data: c,
-	async execute(i: CommandInteraction) {
+	async execute(i: ChatInputCommandInteraction) {
 		const cardName = i.options.get('name', true).value as string;
 		const ephemeral = i.options.get('hidden', true).value as boolean;
 		try {

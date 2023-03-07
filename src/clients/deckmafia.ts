@@ -1,7 +1,8 @@
 import { Client, Events, GatewayIntentBits, REST } from 'discord.js';
-import path from 'path';
+import path, { join } from 'path';
 import { prisma } from '..';
 import config from '../config';
+import { createSignupPost } from '../deckmafia/commands/signups';
 import { loadCommands, deckMafiaCommands } from '../structures/SlashCommand';
 
 export const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -27,6 +28,76 @@ client.on(Events.InteractionCreate, async (interaction) => {
 	} catch (error) {
 		console.error(error);
 		await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+	}
+});
+
+client.on(Events.InteractionCreate, async (i) => {
+	if (!i.isButton()) return;
+
+	const tokens = i.customId.split('_');
+	const customID = tokens.shift();
+	let cache = '';
+	if (tokens.length >= 1) cache = tokens.join('_');
+
+	if (customID == 'player-join') {
+		const joiningID = i.user.id;
+		try {
+			const signup = await prisma.signup.findFirst({ where: { id: cache } });
+			if (!signup) {
+				console.log('Signup no longer valid');
+
+				await i.reply({ content: 'Signups is no longer valid', ephemeral: true });
+				return;
+			}
+
+			const alreadyContains = signup.players.includes(joiningID);
+			if (alreadyContains) {
+				console.log('Already contains');
+				await i.reply({ content: 'You are already signed up for this game.', ephemeral: true });
+				return;
+			}
+
+			const updated = await prisma.signup.update({
+				where: { id: signup.id },
+				data: {
+					players: {
+						push: joiningID,
+					},
+				},
+			});
+
+			const { embed, row } = createSignupPost(updated, i.guild);
+			i.message.edit({ embeds: [embed], components: [row] });
+			await i.reply({ content: 'Successfully joined the signup', ephemeral: true });
+		} catch (err) {
+			await i.reply({ content: 'Unable to join signups, try again later', ephemeral: true });
+		}
+	} else if (customID == 'player-leave') {
+		const leavingID = i.user.id;
+		try {
+			const signup = await prisma.signup.findFirst({ where: { id: cache } });
+			if (!signup) {
+				console.log('Signup no longer valid');
+
+				await i.reply({ content: 'Signups is no longer valid', ephemeral: true });
+				return;
+			}
+
+			const updated = await prisma.signup.update({
+				where: { id: signup.id },
+				data: {
+					players: {
+						set: signup.players.filter((id) => id !== leavingID),
+					},
+				},
+			});
+
+			const { embed, row } = createSignupPost(updated, i.guild);
+			i.message.edit({ embeds: [embed], components: [row] });
+			await i.reply({ content: 'Successfully left the signup, if you were in it.', ephemeral: true });
+		} catch (err) {
+			await i.reply({ content: 'Unable to join signups, try again later', ephemeral: true });
+		}
 	}
 });
 

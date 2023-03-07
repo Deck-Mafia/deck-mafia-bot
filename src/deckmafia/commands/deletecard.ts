@@ -1,4 +1,4 @@
-import { CommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { ChatInputCommandInteraction, CommandInteraction, SlashCommandBuilder } from 'discord.js';
 import { prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 
@@ -9,7 +9,7 @@ c.addStringOption((input) => input.setName('name').setDescription('Name of the c
 
 export default newSlashCommand({
 	data: c,
-	async execute(i: CommandInteraction) {
+	async execute(i: ChatInputCommandInteraction) {
 		const name = i.options.get('name', true).value as string;
 
 		try {

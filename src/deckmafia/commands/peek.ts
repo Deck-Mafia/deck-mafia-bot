@@ -1,4 +1,4 @@
-import { CommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { ChatInputCommandInteraction, CommandInteraction, SlashCommandBuilder } from 'discord.js';
 import { prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 import string from 'string-similarity';
@@ -31,7 +31,7 @@ async function getClosestCardName(cardName: string, list: string[]) {
 
 export default newSlashCommand({
 	data: c,
-	async execute(i: CommandInteraction) {
+	async execute(i: ChatInputCommandInteraction) {
 		const user = i.options.getUser('user', true);
 
 		try {
@@ -50,7 +50,7 @@ export default newSlashCommand({
 
 			if (!inventory) return i.reply({ content: 'User does not have an inventory. To make one, use the `/give` command.' });
 
-			let value = `\`\`\`diff\nINVENTORY FOR ${user.username.toUpperCase()}\n`;
+			let value = `\`\`\`diff\nINVENTORY FOR ${user.username.toUpperCase()}\n- ${inventory.ownedCards.length} CARDS TOTAL\n\n`;
 
 			inventory.ownedCards.forEach((ownedCard) => {
 				value += `+ ${ownedCard.card.name}\n`;

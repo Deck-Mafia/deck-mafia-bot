@@ -4,6 +4,7 @@ import { Colors, Guild, GuildMember } from 'discord.js';
 import { mem } from 'node-os-utils';
 import { listenerCount } from 'process';
 import { database } from '../..';
+import votecount from '../commands/votecount';
 
 export async function checkGameInCategory(categoryId: string) {
 	const [game] = await Promise.allSettled([
@@ -87,7 +88,7 @@ export async function getAllWithRole(guild: Guild, roleID: string) {
 	return result;
 }
 
-async function getAllEvents(voteCountId: string) {
+async function getAllEvents(voteCountId: string): Promise<ActionEvent[]> {
 	const votes = await database.actionEvent.findMany({
 		where: {
 			voteCountId,
@@ -95,7 +96,6 @@ async function getAllEvents(voteCountId: string) {
 		orderBy: {
 			createdAt: 'asc',
 		},
-		include: {},
 	});
 
 	return votes;
@@ -110,8 +110,159 @@ export type Event = {
 	canBeVoted: boolean;
 	countsForMajority: boolean;
 	voteWeight: number;
-	isVotingFor?: DiscordID;
+	isVotingFor: DiscordID | null;
+	isUnvoting: boolean;
 };
+export type PartialEvent = {
+	playerId: DiscordID;
+	canVote: boolean | null;
+	canBeVoted: boolean | null;
+	countsForMajority: boolean | null;
+	voteWeight: number | null;
+	isVotingFor: DiscordID | null;
+	isUnvoting: boolean | null;
+	createdAt: number | undefined;
+};
+
+type VoteCountResponse = {
+	wagons: Record<DiscordID, DiscordID[]>;
+	playerStats: Record<DiscordID, Event>;
+	voteCounter: VoteCount;
+};
+export async function calculateVoteCount(voteCountId: string): Promise<VoteCountResponse | null> {
+	const wagons: Record<DiscordID, DiscordID[]> = {};
+	const currentStats: Record<DiscordID, Event> = {};
+
+	const voteCounter = await database.voteCount.findUnique({ where: { id: voteCountId } });
+	const allEvents = await getAllEvents(voteCountId);
+	if (!voteCounter) return null;
+
+	for (let index = 0; index < allEvents.length; index++) {
+		const focusEvent = allEvents[index];
+		if (!wagons[focusEvent.playerId]) wagons[focusEvent.playerId] = [];
+		if (!currentStats[focusEvent.playerId]) currentStats[focusEvent.playerId] = createDefaultEvent(focusEvent.playerId);
+
+		// Update Stats
+		const mutable = currentStats[focusEvent.playerId];
+		mutable.canBeVoted = focusEvent.canBeVoted ?? mutable.canBeVoted;
+		mutable.canVote = focusEvent.canVote ?? mutable.canVote;
+		mutable.countsForMajority = focusEvent.countsForMajority ?? mutable.countsForMajority;
+		mutable.voteWeight = focusEvent.voteWeight ?? mutable.voteWeight;
+
+		if (voteCounter.lockedVotes) {
+			mutable.isVotingFor = mutable.isVotingFor ?? focusEvent.isVotingFor;
+		} else {
+			mutable.isVotingFor = focusEvent.isVotingFor ?? mutable.isVotingFor;
+			if (focusEvent.isUnvoting) {
+				mutable.isVotingFor = null;
+			}
+		}
+
+		// Manipulate Wagons
+		for (const wagonKey in wagons) {
+			const wagon = wagons[wagonKey];
+			const canBeVoted = currentStats[wagonKey].canBeVoted;
+			const canVote = currentStats[focusEvent.playerId].canVote;
+
+			if (!mutable.isVotingFor || !(canBeVoted && canVote)) {
+				if (wagons[wagonKey].includes(focusEvent.playerId)) wagons[wagonKey] = wagon.filter((v) => v != focusEvent.playerId);
+				if (!canBeVoted) delete wagons[wagonKey];
+			} else {
+				if (wagonKey === mutable.isVotingFor) {
+					if (!wagon.includes(focusEvent.playerId)) wagons[wagonKey] = [...wagon, focusEvent.playerId];
+				} else {
+					wagons[wagonKey] = wagon.filter((v) => v != focusEvent.playerId);
+				}
+			}
+		}
+
+		// Calculate Majority
+		if (voteCounter.majority) {
+			let playerCount = 0;
+			for (const statKey in currentStats) {
+				const stat = currentStats[statKey];
+				if (stat.countsForMajority) playerCount += 1;
+			}
+
+			const majority = Math.floor(playerCount / 2 + 1);
+			let majorityReached: boolean = false;
+			for (const wagonKey in wagons) {
+				const wagon = wagons[wagonKey];
+				let totalVoteWeight = 0;
+				for (const voter of wagon) {
+					const stats = currentStats[voter];
+					if (stats) totalVoteWeight += stats.voteWeight ?? 1;
+				}
+				if (totalVoteWeight >= majority) majorityReached = true;
+			}
+
+			if (majorityReached)
+				return {
+					wagons,
+					playerStats: currentStats,
+					voteCounter,
+				};
+		}
+	}
+	return { wagons, playerStats: currentStats, voteCounter };
+}
+
+export async function createVoteCountPost(voteCount: VoteCountResponse, guild: Guild) {
+	const { wagons, playerStats, voteCounter } = voteCount;
+	await guild.members.fetch();
+	let playerCount = 0;
+
+	const embed = new EmbedBuilder();
+	embed.setTitle('VoteCount');
+
+	embed.setThumbnail(guild.iconURL());
+	embed.setColor(Colors.White);
+
+	if (voteCount.voteCounter.majority) {
+		for (const statKey in playerStats) {
+			const stat = playerStats[statKey];
+			if (stat.countsForMajority) playerCount += 1;
+		}
+	}
+
+	let totalString = '';
+	for (const wagonKey in wagons) {
+		const wagon = wagons[wagonKey];
+		const target = guild.members.cache.get(wagonKey);
+		const wagonTop = target?.displayName || `<@${wagonKey}>`;
+		const wagonNames: string[] = [];
+		let totalVoteWeight = 0;
+		for (const name of wagon) {
+			const stat = playerStats[name];
+			totalVoteWeight += stat?.voteWeight ?? 1;
+			const target = guild.members.cache.get(name);
+			if (!target) wagonNames.push(`<@${name}>`);
+			else wagonNames.push(target.displayName);
+		}
+
+		const wagonString = `**${wagonTop} (${totalVoteWeight})** - ${wagonNames.join(', ')}`.trim();
+
+		if (wagonString != '' && totalVoteWeight > 0) totalString += `\n${wagonString}\n`;
+	}
+
+	if (totalString == '') totalString = 'No Votes';
+
+	embed.setFields({
+		name: 'Votes',
+		value: totalString,
+	});
+
+	if (voteCounter.majority) {
+		const majority = Math.floor(playerCount / 2 + 1);
+
+		embed.addFields({
+			name: 'Majority',
+			value: `> ${playerCount} alive so ${majority} is Majority`,
+		});
+	}
+
+	return embed;
+}
 
 const createDefaultEvent = (discordId: string): Event => {
 	return {
@@ -120,138 +271,38 @@ const createDefaultEvent = (discordId: string): Event => {
 		canBeVoted: true,
 		countsForMajority: true,
 		voteWeight: 1,
+		isUnvoting: false,
+		isVotingFor: null,
 	};
 };
 
-async function calculateVoteCount(voteCountId: string) {
-	const voteCount: Record<DiscordID, Wagon> = {};
-	const currentEvents: Record<DiscordID, Event> = {};
-	const majority: string[] = [];
+export async function createNewEvent(voteCountId: string, event: PartialEvent) {
+	const { canBeVoted, canVote, countsForMajority, playerId, voteWeight, isVotingFor, isUnvoting, createdAt } = event;
+	try {
+		const voteCounter = await database.voteCount.findUnique({
+			where: {
+				id: voteCountId,
+			},
+		});
 
-	const getLastEvent = (discordId: DiscordID): Event => {
-		if (!currentEvents[discordId]) currentEvents[discordId] = createDefaultEvent(discordId);
-		return currentEvents[discordId];
-	};
+		if (!voteCounter) return null;
+		const e = await database.actionEvent.create({
+			data: {
+				playerId,
+				voteCountId: voteCounter.id,
+				canBeVoted: canBeVoted ?? undefined,
+				canVote: canVote ?? undefined,
+				isVotingFor: isVotingFor ?? undefined,
+				voteWeight: voteWeight ?? undefined,
+				countsForMajority: countsForMajority ?? undefined,
+				isUnvoting: isUnvoting ?? undefined,
+				createdAt: createdAt ? new Date(createdAt) : undefined,
+			},
+		});
 
-	const allEvents = await getAllEvents(voteCountId);
-	for (const e of allEvents) {
-		let event = getLastEvent(e.playerId);
-
-		event.canBeVoted = e.canBeVoted !== null ? e.canBeVoted : event.canBeVoted;
-		event.canVote = e.canVote !== null ? e.canVote : event.canVote;
-		event.voteWeight = e.voteWeight !== null ? e.voteWeight : event.voteWeight;
-		event.isVotingFor = e.isVotingFor !== null ? e.isVotingFor : event.isVotingFor;
-		event.countsForMajority = e.countsForMajority !== null ? e.countsForMajority : event.countsForMajority;
-
-		if (!event.canBeVoted) delete voteCount[event.playerId];
-
-		if (event.countsForMajority) {
-		} else {
-		}
-
-		if (event.canVote && event.isVotingFor) {
-			const oldWagon = voteCount[event.isVotingFor];
-			const voteWeight = event.voteWeight;
-			// If already is on wagon. Ignore, otherwise add it.
-		} else if (!event.canVote) {
-			// Iterate through all wagons. Remove playerID
-		}
-
-		currentEvents[e.playerId] = event;
+		return e;
+	} catch (err) {
+		console.log(err);
+		return null;
 	}
 }
-
-// export async function createVoteCountPost(guild: Guild, voteCount: VoteCount) {
-// 	const voteCommand = await getCommandID(guild, 'vote');
-// 	const unvoteCommand = await getCommandID(guild, 'unvote');
-// 	const livingPlayers = await getAllWithRole(guild, voteCount.livingRoleId);
-// 	const allVotes = await getAllVotes(voteCount.id);
-
-// 	const members: Record<string, GuildMember> = {};
-// 	const wagons: Record<string, string[]> = {};
-// 	let notVotingList: string[] = [];
-
-// 	for (let i = 0; i < livingPlayers.length; i++) {
-// 		const player = livingPlayers[i];
-// 		members[player.id] = player;
-// 		notVotingList.push(player.id);
-// 	}
-
-// 	for (let i = 0; i < allVotes.length; i++) {
-// 		const vote = allVotes[i];
-// 		const { authorId, targetId } = vote;
-
-// 		if (targetId) {
-// 			if (wagons[targetId]) wagons[targetId] = [];
-// 			wagons[targetId].push(authorId);
-// 			notVotingList = notVotingList.filter((v) => v != authorId);
-// 		}
-// 	}
-
-// 	let notVoting = '> ';
-// 	notVotingList.forEach((v, index) => {
-// 		let name = members[v].user.username;
-// 		if (index === 0) notVoting += name;
-// 		else notVoting += `, ${name}`;
-// 	});
-// 	if (notVoting == '> ') notVoting += 'None';
-
-// 	const embed = new EmbedBuilder();
-// 	embed.setTitle('Votecount');
-// 	embed.setColor(Colors.White);
-// 	const voteString = '> None';
-
-// 	embed.addFields(
-// 		{
-// 			name: 'Commands',
-// 			value: `> </vote:${voteCommand}>\n> </unvote:${unvoteCommand}>`,
-// 		},
-// 		{
-// 			name: 'Votes',
-// 			value: voteString,
-// 		},
-// 		{
-// 			name: 'Not Voting',
-// 			value: notVoting,
-// 		}
-// 	);
-
-// 	if (voteCount.majority)
-// 		embed.setFooter({
-// 			text: `With ${livingPlayers.length} alive, it takes ${Math.ceil(livingPlayers.length / 2)} to reach majority\nVotes are locked. Once they are placed, they cannot be changed.`,
-// 		});
-
-// 	return embed;
-// }
-
-// export async function createOrUpdateVote(voteCount: VoteCount, playerId: string, voted?: string) {
-// 	let vote = await database.vote.findFirst({
-// 		where: {
-// 			voteCountId: voteCount.id,
-// 			authorId: playerId,
-// 		},
-// 	});
-
-// 	if (!vote) {
-// 		const newVote = await database.vote.create({
-// 			data: {
-// 				authorId: playerId,
-// 				voteCountId: voteCount.id,
-// 				targetId: voted,
-// 			},
-// 		});
-
-// 		return newVote;
-// 	}
-
-// 	const updatedVote = await database.vote.update({
-// 		where: {
-// 			id: vote.id,
-// 		},
-// 		data: {
-// 			targetId: voted,
-// 		},
-// 	});
-
-// 	return updatedVote;
-// }

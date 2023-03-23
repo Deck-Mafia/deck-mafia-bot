@@ -42,13 +42,13 @@ model Player {
   gameId           String         @db.ObjectId
   game             RegisteredGame @relation(fields: [gameId], references: [id])
   discordAccount   DiscordAccount @relation(fields: [discordAccountId], references: [id])
-  createdEvents    ActionEvent[]
 
   @@unique([gameId, discordAccountId])
 }
 
 model VoteCount {
   id           String        @id @default(auto()) @map("_id") @db.ObjectId
+  guildId      String
   channelId    String        @unique
   majority     Boolean       @default(false)
   plurality    Boolean       @default(true)
@@ -56,20 +56,23 @@ model VoteCount {
   hammered     Boolean       @default(false)
   livingRoleId String
   events       ActionEvent[]
+  active       Boolean       @default(true)
+  closeAt      DateTime?
+  lastPeriod   DateTime      @default(now())
   createdAt    DateTime      @default(now())
 }
 
 model ActionEvent {
   id                String    @id @default(auto()) @map("_id") @db.ObjectId
-  playerId          String    @db.ObjectId
+  playerId          String
   voteCountId       String    @db.ObjectId
   voteCount         VoteCount @relation(fields: [voteCountId], references: [id])
-  target            Player    @relation(fields: [playerId], references: [id])
   canVote           Boolean?
   canBeVoted        Boolean?
   countsForMajority Boolean?
   voteWeight        Int?
   isVotingFor       String?
+  isUnvoting        Boolean?
   createdAt         DateTime  @default(now())
 }
 

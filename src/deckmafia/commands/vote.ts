@@ -1,7 +1,7 @@
 import { ChatInputCommandInteraction, CommandInteraction, SlashCommandBuilder, TextChannel } from 'discord.js';
 import { database, prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
-import { checkGameInCategory, checkVoteCountInChannel } from '../util/voteCount';
+import { calculateVoteCount, checkGameInCategory, checkVoteCountInChannel, createNewEvent, createVoteCountPost, PartialEvent } from '../util/voteCount';
 
 const c = new SlashCommandBuilder();
 c.setName('vote');
@@ -16,15 +16,40 @@ export default newSlashCommand({
 		const parentId = (i.channel as TextChannel).parentId;
 		if (!parentId) return;
 
+		const votedUser = i.options.getUser('player', true);
+		const votedId = votedUser.id;
+
 		const voteCounter = await checkVoteCountInChannel(i.channelId);
 		if (!voteCounter) return await i.reply({ content: 'You cannot vote with the bot in a channel without an automated vote counter', ephemeral: true });
 
-		// const voteCounterPost = await createVoteCountPost(i.guild, voteCounter);
-		// await i.reply({ embeds: [voteCounterPost] });
+		await i.guild.members.fetch();
 
-		// const isVoteLocked = false;
-		// if (isVoteLocked) return await i.reply({ content: 'You cannot change your vote as votes are locked', ephemeral: true });
+		const votedMember = i.guild.members.cache.get(votedId);
+		const votingMember = i.guild.members.cache.get(i.user.id);
 
-		// await i.reply(`<@${i.user.id}> (${i.user.username}) has voted for <@${i.options.getUser('player', true).id}> (${i.options.getUser('player', true).username})`);
+		try {
+			let partial: PartialEvent = {
+				playerId: i.user.id,
+				canBeVoted: null,
+				canVote: null,
+				countsForMajority: null,
+				isUnvoting: null,
+				isVotingFor: votedId,
+				voteWeight: null,
+				createdAt: undefined,
+			};
+
+			const event = await createNewEvent(voteCounter.id, partial);
+			await i.reply(`**${votingMember?.displayName ?? i.user.username}** has voted for **${votedMember?.displayName ?? votedUser.username}**`);
+
+			const data = await calculateVoteCount(voteCounter.id);
+			if (!data) throw Error();
+
+			const voteCount = await createVoteCountPost(data, i.guild);
+			await i.followUp({ embeds: [voteCount] });
+		} catch (err) {
+			console.log(err);
+			await i.reply({ ephemeral: true, content: 'Vote failed to occur. Please contact the host ASAP with who you wanted to vote if this continues.' });
+		}
 	},
 });

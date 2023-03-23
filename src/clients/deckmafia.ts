@@ -1,8 +1,9 @@
 import { Client, Events, GatewayIntentBits, REST } from 'discord.js';
 import path, { join } from 'path';
-import { prisma } from '..';
+import { database, prisma } from '..';
 import config from '../config';
 import { createSignupPost } from '../deckmafia/commands/signups';
+import { calculateVoteCount, createVoteCountPost } from '../deckmafia/util/voteCount';
 import { loadCommands, deckMafiaCommands } from '../structures/SlashCommand';
 
 export const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -128,6 +129,50 @@ client.on(Events.InteractionCreate, async (i) => {
 		i.reply({ content: 'Done', ephemeral: true });
 	}
 });
-export function start() {
-	client.login(config.discordBotToken);
+
+export async function start() {
+	await client.login(config.discordBotToken);
+	// setInterval(async () => {
+	// 	const activeVoteCounts = await database.voteCount.findMany({
+	// 		where: {
+	// 			active: true,
+	// 		},
+	// 	});
+
+	// 	await client.guilds.fetch();
+
+	// 	for (const vc of activeVoteCounts) {
+	// 		const { guildId, channelId, lastPeriod, closeAt, active, id } = vc;
+
+	// 		const guild = client.guilds.cache.get(guildId);
+	// 		if (!guild) continue;
+
+	// 		await guild.channels.fetch();
+	// 		const channel = guild.channels.cache.get(channelId);
+	// 		if (!channel) continue; // Probably close VC if this is the case.
+
+	// 		const currentTime = Date.now();
+
+	// 		if (closeAt) {
+	// 			const needsToClose = currentTime > closeAt.getTime();
+	// 			if (needsToClose) {
+	// 				await database.voteCount.update({
+	// 					where: {
+	// 						id,
+	// 					},
+	// 					data: {
+	// 						active: false,
+	// 						closeAt: null,
+	// 					},
+	// 				});
+
+	// 				const vc = await calculateVoteCount(id);
+	// 				if (vc) {
+	// 					const embed = await createVoteCountPost(vc, guild);
+	// 					if (channel.isTextBased()) channel.send({ content: 'Day has ended', embeds: [embed] });
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }, 1000 * 10);
 }

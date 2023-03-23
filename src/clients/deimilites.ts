@@ -1,10 +1,9 @@
-import { ActionRowBuilder, CategoryChannel, Channel, ChannelSelectMenuBuilder, ChannelType, Client, Colors, EmbedBuilder, Events, GatewayIntentBits, REST, TextChannel, UserSelectMenuBuilder } from 'discord.js';
+import { ActionRowBuilder, Client, Events, GatewayIntentBits, REST, TextChannel, UserSelectMenuBuilder } from 'discord.js';
 import path from 'path';
 import { prisma } from '..';
 import config from '../config';
 import { createSpell, createSpellPost } from '../deimilites/utils/spells';
 import { loadCommands, deiMilitesCommands } from '../structures/SlashCommand';
-import { getPlayer } from '../util/deiActions';
 
 export const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 const deiMilitesRest = new REST({ version: '10' }).setToken(config.deiMilitesBotToken);

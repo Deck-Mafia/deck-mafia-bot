@@ -130,6 +130,10 @@ client.on(Events.InteractionCreate, async (i) => {
 	}
 });
 
+client.on(Events.ShardDisconnect, (e, id) => {
+	console.log(e.code, e.reason, id);
+});
+
 export async function start() {
 	await client.login(config.discordBotToken);
 	// setInterval(async () => {

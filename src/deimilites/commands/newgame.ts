@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder, ChannelType, CommandInteraction, SlashCommandBuilder, TextChannel, User } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder, ChannelType, ChatInputCommandInteraction, CommandInteraction, SlashCommandBuilder, TextChannel, User } from 'discord.js';
 import { prisma } from '../..';
 import { newDeiMilitesCommand, newSlashCommand } from '../../structures/SlashCommand';
 
@@ -15,7 +15,7 @@ generateUsers(c, 10);
 
 export default newDeiMilitesCommand({
 	data: c,
-	async execute(i: CommandInteraction) {
+	async execute(i: ChatInputCommandInteraction) {
 		try {
 			const channel = i.channel as TextChannel;
 			const category = channel.parent;
@@ -36,13 +36,32 @@ export default newDeiMilitesCommand({
 			const newGame = await prisma.deiMilitesGame.create({
 				data: {
 					gameCategoryId: category.id,
+					hosts: {
+						connectOrCreate: {
+							create: {
+								discordId: i.user.id,
+							},
+							where: {
+								discordId: i.user.id,
+							},
+						},
+					},
 				},
 			});
 
 			for (let index = 0; index < players.length; index++) {
 				await prisma.deiMilitesPlayer.create({
 					data: {
-						discordId: players[index],
+						account: {
+							connectOrCreate: {
+								create: {
+									discordId: players[index],
+								},
+								where: {
+									discordId: players[index],
+								},
+							},
+						},
 						game: {
 							connect: {
 								id: newGame.id,

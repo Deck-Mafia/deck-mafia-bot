@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,6 +5,75 @@ generator client {
 datasource db {
   provider = "mongodb"
   url      = env("DATABASE_URL")
+}
+
+model DiscordAccount {
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  discordId String @unique
+
+  playing         DeiMilitesPlayer[]
+  hosting         DeiMilitesGame[]   @relation(fields: [hostingGameIds], references: [id])
+  hostingGameIds  String[]           @db.ObjectId
+  deckMafiaPlayer Player[]
+}
+
+// SIGNUPS
+model Signup {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String?
+  signupTimer Int?
+  players     String[]
+  limit       Int?
+}
+
+// VOTE COUNTER
+model RegisteredGame {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  livingRoleId  String
+  deadRoleId    String
+  missingRoleId String
+  categoryId    String   @unique
+  players       Player[]
+}
+
+model Player {
+  id               String         @id @default(auto()) @map("_id") @db.ObjectId
+  discordAccountId String         @db.ObjectId
+  gameId           String         @db.ObjectId
+  game             RegisteredGame @relation(fields: [gameId], references: [id])
+  discordAccount   DiscordAccount @relation(fields: [discordAccountId], references: [id])
+
+  @@unique([gameId, discordAccountId])
+}
+
+model VoteCount {
+  id           String        @id @default(auto()) @map("_id") @db.ObjectId
+  guildId      String
+  channelId    String        @unique
+  majority     Boolean       @default(false)
+  plurality    Boolean       @default(true)
+  lockedVotes  Boolean       @default(false)
+  hammered     Boolean       @default(false)
+  livingRoleId String
+  events       ActionEvent[]
+  active       Boolean       @default(true)
+  closeAt      DateTime?
+  lastPeriod   DateTime      @default(now())
+  createdAt    DateTime      @default(now())
+}
+
+model ActionEvent {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  playerId          String
+  voteCountId       String    @db.ObjectId
+  voteCount         VoteCount @relation(fields: [voteCountId], references: [id])
+  canVote           Boolean?
+  canBeVoted        Boolean?
+  countsForMajority Boolean?
+  voteWeight        Int?
+  isVotingFor       String?
+  isUnvoting        Boolean?
+  createdAt         DateTime  @default(now())
 }
 
 // DECK MAFIA
@@ -40,60 +106,74 @@ model DeiMilitesGame {
   id             String             @id @default(auto()) @map("_id") @db.ObjectId
   gameCategoryId String             @unique
   players        DeiMilitesPlayer[]
+  hosts          DiscordAccount[]   @relation(fields: [hostIds], references: [id])
+  hostIds        String[]           @db.ObjectId
   currentTurn    Int                @default(1)
+  spells         Spell[]
+  elements       Element[]
+  items          Item[]
 }
 
 model DeiMilitesPlayer {
-  id            String             @id @default(auto()) @map("_id") @db.ObjectId
-  game          DeiMilitesGame     @relation(fields: [gameId], references: [id])
-  gameId        String             @db.ObjectId
-  health        Int                @default(35)
-  ownedElements OwnedElement[]
-  discordId     String
-  isDead        Boolean?
-  actions       DeiMilitesAction[]
+  id               String         @id @default(auto()) @map("_id") @db.ObjectId
+  gameId           String         @db.ObjectId
+  discordAccountId String         @db.ObjectId
+  account          DiscordAccount @relation(fields: [discordAccountId], references: [id])
+  game             DeiMilitesGame @relation(fields: [gameId], references: [id])
+  health           Int            @default(35)
+  chel             Int            @default(0)
+  classes          String[]
+  weapons          String[]
+  armour           String[]
+  summons          String[]
+  isDead           Boolean?
+  spells           Spell[]        @relation(fields: [spellIds], references: [id])
+  spellIds         String[]       @db.ObjectId
+  ownedElements    OwnedElement[]
+  items            Item[]         @relation(fields: [itemId], references: [id])
+  itemId           String[]       @db.ObjectId
 }
 
-model DeiMilitesAction {
-  id        String           @id @default(auto()) @map("_id") @db.ObjectId
-  type      String
-  data      String?
-  createdAt DateTime         @default(now())
-  author    DeiMilitesPlayer @relation(fields: [playerId], references: [id])
-  playerId  String           @db.ObjectId
+model Element {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  game          DeiMilitesGame @relation(fields: [gameId], references: [id])
+  gameId        String         @db.ObjectId
+  name          String
+  ownedElements OwnedElement[]
+
+  @@unique([name, gameId])
 }
 
 model OwnedElement {
   id        String           @id @default(auto()) @map("_id") @db.ObjectId
-  player    DeiMilitesPlayer @relation(fields: [playerId], references: [id])
   element   Element          @relation(fields: [elementId], references: [id])
-  amount    Int
-  playerId  String           @db.ObjectId
+  player    DeiMilitesPlayer @relation(fields: [playerId], references: [id])
   elementId String           @db.ObjectId
+  playerId  String           @db.ObjectId
+  amount    Int              @default(0)
 }
 
-model Element {
-  id              String         @id @default(auto()) @map("_id") @db.ObjectId
-  name            String
-  ownedElements   OwnedElement[]
-  spellsCosts     SpellCost[]
-  spellAffinities Spells[]
+model Spell {
+  id               String             @id @default(auto()) @map("_id") @db.ObjectId
+  game             DeiMilitesGame     @relation(fields: [deiMilitesGameId], references: [id])
+  owners           DeiMilitesPlayer[] @relation(fields: [ownerIds], references: [id])
+  ownerIds         String[]           @db.ObjectId
+  deiMilitesGameId String             @db.ObjectId
+  name             String
+  description      String
+  cost             String
+  sideEffects      String?
+  hidden           String?
 }
 
-model Spells {
-  id          String    @id @default(auto()) @map("_id") @db.ObjectId
-  spellCost   SpellCost @relation(fields: [spellCostId], references: [id])
-  affinity    Element   @relation(fields: [elementId], references: [id])
-  name        String
-  spellCostId String    @db.ObjectId
-  elementId   String    @db.ObjectId
-}
-
-model SpellCost {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  element     Element  @relation(fields: [elementId], references: [id])
-  amount      Int
-  description String
-  elementId   String   @db.ObjectId
-  Spells      Spells[]
+model Item {
+  id               String             @id @default(auto()) @map("_id") @db.ObjectId
+  game             DeiMilitesGame     @relation(fields: [deiMilitesGameId], references: [id])
+  owners           DeiMilitesPlayer[] @relation(fields: [ownerIds], references: [id])
+  ownerIds         String[]           @db.ObjectId
+  name             String
+  effect           String
+  cost             String?
+  hidden           String?
+  deiMilitesGameId String             @db.ObjectId
 }

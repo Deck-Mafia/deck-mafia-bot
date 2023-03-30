@@ -1,4 +1,4 @@
-import { CommandInteraction, SlashCommandBuilder, User } from 'discord.js';
+import { ChatInputCommandInteraction, CommandInteraction, SlashCommandBuilder, User } from 'discord.js';
 import { prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 import string from 'string-similarity';
@@ -82,7 +82,7 @@ async function fetchCardData(i: CommandInteraction, cardName: string, user: User
 
 export default newSlashCommand({
 	data: c,
-	async execute(i: CommandInteraction) {
+	async execute(i: ChatInputCommandInteraction) {
 		const cardName = i.options.get('card', true).value as string;
 		const user = i.options.getUser('user', true);
 		let additionalCardNames: string[] = [];

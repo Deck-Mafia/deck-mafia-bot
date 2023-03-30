@@ -1,7 +1,10 @@
 import { Client, Events, GatewayIntentBits, REST } from 'discord.js';
-import path from 'path';
-import { prisma } from '..';
+import path, { join } from 'path';
+import { database, prisma } from '..';
 import config from '../config';
+import { createSignupPost } from '../deckmafia/commands/signups';
+import { checkForRegularVoteCount, checkOnClose } from '../deckmafia/util/onTick';
+import { calculateVoteCount, createVoteCountPost } from '../deckmafia/util/voteCount';
 import { loadCommands, deckMafiaCommands } from '../structures/SlashCommand';
 
 export const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -27,6 +30,76 @@ client.on(Events.InteractionCreate, async (interaction) => {
 	} catch (error) {
 		console.error(error);
 		await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+	}
+});
+
+client.on(Events.InteractionCreate, async (i) => {
+	if (!i.isButton()) return;
+
+	const tokens = i.customId.split('_');
+	const customID = tokens.shift();
+	let cache = '';
+	if (tokens.length >= 1) cache = tokens.join('_');
+
+	if (customID == 'player-join') {
+		const joiningID = i.user.id;
+		try {
+			const signup = await prisma.signup.findFirst({ where: { id: cache } });
+			if (!signup) {
+				console.log('Signup no longer valid');
+
+				await i.reply({ content: 'Signups is no longer valid', ephemeral: true });
+				return;
+			}
+
+			const alreadyContains = signup.players.includes(joiningID);
+			if (alreadyContains) {
+				console.log('Already contains');
+				await i.reply({ content: 'You are already signed up for this game.', ephemeral: true });
+				return;
+			}
+
+			const updated = await prisma.signup.update({
+				where: { id: signup.id },
+				data: {
+					players: {
+						push: joiningID,
+					},
+				},
+			});
+
+			const { embed, row } = createSignupPost(updated, i.guild);
+			i.message.edit({ embeds: [embed], components: [row] });
+			await i.reply({ content: 'Successfully joined the signup', ephemeral: true });
+		} catch (err) {
+			await i.reply({ content: 'Unable to join signups, try again later', ephemeral: true });
+		}
+	} else if (customID == 'player-leave') {
+		const leavingID = i.user.id;
+		try {
+			const signup = await prisma.signup.findFirst({ where: { id: cache } });
+			if (!signup) {
+				console.log('Signup no longer valid');
+
+				await i.reply({ content: 'Signups is no longer valid', ephemeral: true });
+				return;
+			}
+
+			const updated = await prisma.signup.update({
+				where: { id: signup.id },
+				data: {
+					players: {
+						set: signup.players.filter((id) => id !== leavingID),
+					},
+				},
+			});
+
+			const { embed, row } = createSignupPost(updated, i.guild);
+			i.message.edit({ embeds: [embed], components: [row] });
+			await i.reply({ content: 'Successfully left the signup, if you were in it.', ephemeral: true });
+		} catch (err) {
+			await i.reply({ content: 'Unable to join signups, try again later', ephemeral: true });
+		}
 	}
 });
 
@@ -57,6 +130,28 @@ client.on(Events.InteractionCreate, async (i) => {
 		i.reply({ content: 'Done', ephemeral: true });
 	}
 });
-export function start() {
-	client.login(config.discordBotToken);
+
+client.on(Events.ShardDisconnect, (e, id) => {
+	console.log(e.code, e.reason, id);
+});
+
+export async function start() {
+	await client.login(config.discordBotToken);
+	tick(client);
+}
+
+async function tick(client: Client) {
+	const activeVoteCounts = await database.voteCount.findMany({ where: { active: true } });
+	await client.guilds.fetch();
+
+	for (const voteCount of activeVoteCounts) {
+		const { guildId, channelId, closeAt, id } = voteCount;
+		const guild = client.guilds.cache.get(guildId);
+		if (guild && closeAt) await checkOnClose({ guild, voteCount });
+		if (guild && voteCount.lastPeriod) await checkForRegularVoteCount({ guild, voteCount });
+	}
+
+	setTimeout(() => {
+		tick(client);
+	}, 1000 * 10);
 }

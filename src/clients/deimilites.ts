@@ -1,7 +1,8 @@
-import { ActionRowBuilder, CategoryChannel, Channel, ChannelSelectMenuBuilder, ChannelType, Client, Colors, EmbedBuilder, Events, GatewayIntentBits, REST, TextChannel, UserSelectMenuBuilder } from 'discord.js';
+import { ActionRowBuilder, Client, Events, GatewayIntentBits, REST, TextChannel, UserSelectMenuBuilder } from 'discord.js';
 import path from 'path';
 import { prisma } from '..';
 import config from '../config';
+import { createSpell, createSpellPost } from '../deimilites/utils/spells';
 import { loadCommands, deiMilitesCommands } from '../structures/SlashCommand';
 
 export const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -41,86 +42,67 @@ client.on(Events.InteractionCreate, async (i) => {
 });
 
 client.on(Events.InteractionCreate, async (i) => {
-	if (!i.isUserSelectMenu()) return;
-	const values = i.values;
-	const channel = i.channel as TextChannel;
-	const category = channel.parent as CategoryChannel;
+	if (!i.isModalSubmit()) return;
+	const channel = i.channel;
+	if (!channel || !channel.isTextBased()) return;
+	const category = (channel as TextChannel).parentId;
+	if (!category) return;
+	const split = i.customId.split('_');
 
-	switch (i.customId) {
-		case 'manage-player':
-			if (!i.guild) {
-				i.reply({ content: 'An unexpected error has occurred fetching discord guild', ephemeral: true });
+	if (split[0] == 'new-spell') {
+		try {
+			const name = i.fields.getTextInputValue('spell-name');
+			const description = i.fields.getTextInputValue('spell-effect');
+			const cost = i.fields.getTextInputValue('spell-cost');
+			const sideEffects = i.fields.getTextInputValue('spell-side-effect');
+			const hidden = i.fields.getTextInputValue('spell-hidden');
+
+			const { spell, status } = await createSpell(category, { name, description, cost, sideEffects, hidden });
+			if (!spell) {
+				console.log(status);
 				return;
 			}
 
-			const userId = values[0];
-			if (!userId) {
-				i.reply({ content: 'Invalid input', ephemeral: true });
-				return;
-			}
+			const { embed } = createSpellPost(spell);
+			await i.reply({ embeds: [embed] });
+		} catch (err) {
+			console.log(err);
+		}
+	} else if (split[0] == 'edit-spell') {
+		const name = i.fields.getTextInputValue('spell-name');
+		const description = i.fields.getTextInputValue('spell-effect');
+		const cost = i.fields.getTextInputValue('spell-cost');
+		const sideEffects = i.fields.getTextInputValue('spell-side-effect');
+		const hidden = i.fields.getTextInputValue('spell-hidden');
 
-			const user = i.guild.members.cache.get(userId);
-			if (!user) {
-				i.reply({ content: 'Invalid input', ephemeral: true });
-				return;
-			}
+		const spellID = split[1];
 
-			const gameUser = await prisma.deiMilitesPlayer.findFirst({
-				where: {
-					game: {
-						gameCategoryId: category.id,
-					},
-					discordId: user.id,
-				},
-			});
+		const updated = await prisma.spell.update({
+			where: {
+				id: spellID,
+			},
+			data: {
+				name,
+				description,
+				cost,
+				sideEffects,
+				hidden,
+			},
+		});
 
-			console.log(gameUser);
-
-			if (!gameUser) {
-				i.reply({ content: 'User is not a part of the game.', ephemeral: true });
-				return;
-			}
-
-			const embed = new EmbedBuilder();
-			embed.setTitle(user.user.username);
-			embed.setColor(Colors.Blurple);
-			embed.addFields(
-				{
-					name: 'Health',
-					value: gameUser.health.toString(),
-					inline: true,
-				},
-				{
-					name: 'Chel',
-					value: 'N/A',
-					inline: true,
-				},
-				{
-					name: 'Elements',
-					value: 'Mind - 4',
-					inline: false,
-				},
-				{
-					name: 'Spells',
-					value: 'Blood Bond - 4 Native, 4 Mind ',
-					inline: false,
-				},
-				{
-					name: 'Creatures',
-					value: 'None',
-					inline: false,
-				},
-				{
-					name: 'Items',
-					value: 'None',
-					inline: false,
-				}
-			);
-			embed.setThumbnail(user.user.avatarURL());
-
-			i.reply({ embeds: [embed] });
-			break;
+		const { embed } = createSpellPost(updated);
+		await i.reply({ embeds: [embed] });
+	} else if (split[0] === 'new-item') {
+		const name = i.fields.getTextInputValue('item-name');
+		const description = i.fields.getTextInputValue('item-effect');
+		const cost = i.fields.getTextInputValue('item-cost');
+		const hidden = i.fields.getTextInputValue('item-hidden');
 	}
+
+	/* 
+		Errors here have no response to not lose the data.
+		Soon. Make an error embed, and return that instead with all the data.
+	*/
 });
 
 export function start() {

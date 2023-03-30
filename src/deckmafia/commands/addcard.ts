@@ -1,4 +1,4 @@
-import { CommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { ChatInputCommandInteraction, CommandInteraction, SlashCommandBuilder } from 'discord.js';
 import { prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 
@@ -11,7 +11,7 @@ c.addBooleanOption((i) => i.setName('public').setDescription('Is the card suppos
 
 export default newSlashCommand({
 	data: c,
-	async execute(i: CommandInteraction) {
+	async execute(i: ChatInputCommandInteraction) {
 		const name = i.options.get('name', true).value as string;
 		const url = i.options.get('url', true).value as string;
 		const publicOption = i.options.get('public', false);

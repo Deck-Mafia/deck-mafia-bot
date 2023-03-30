@@ -1,4 +1,4 @@
-import { ActionRow, ActionRowBuilder, APISelectMenuOption, CommandInteraction, SelectMenuComponentOptionData, SlashCommandBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
+import { ActionRow, ActionRowBuilder, APISelectMenuOption, ChatInputCommandInteraction, CommandInteraction, SelectMenuComponentOptionData, SlashCommandBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
 import { prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 import string from 'string-similarity';
@@ -9,7 +9,7 @@ c.setDescription('Submit any amount of cards that you own.');
 
 export default newSlashCommand({
 	data: c,
-	async execute(i: CommandInteraction) {
+	async execute(i: ChatInputCommandInteraction) {
 		try {
 			const ownedCards = await prisma.ownedCard.findMany({
 				where: {

@@ -1,10 +1,11 @@
 import { EmbedBuilder } from '@discordjs/builders';
 import { ActionEvent, RegisteredGame, VoteCount } from '@prisma/client';
+import { time } from 'console';
 import { Colors, Guild, GuildMember } from 'discord.js';
 import { mem } from 'node-os-utils';
 import { listenerCount } from 'process';
 import { database } from '../..';
-import votecount from '../commands/votecount';
+import votecount from '../commands/managevotecount';
 
 export async function checkGameInCategory(categoryId: string) {
 	const [game] = await Promise.allSettled([
@@ -112,17 +113,9 @@ export type Event = {
 	voteWeight: number;
 	isVotingFor: DiscordID | null;
 	isUnvoting: boolean;
+	createdAt: Date;
 };
-export type PartialEvent = {
-	playerId: DiscordID;
-	canVote: boolean | null;
-	canBeVoted: boolean | null;
-	countsForMajority: boolean | null;
-	voteWeight: number | null;
-	isVotingFor: DiscordID | null;
-	isUnvoting: boolean | null;
-	createdAt: number | undefined;
-};
+export type EventPartial = Partial<Event>;
 
 type VoteCountResponse = {
 	wagons: Record<DiscordID, DiscordID[]>;
@@ -216,7 +209,7 @@ export async function createVoteCountPost(voteCount: VoteCountResponse, guild: G
 	embed.setTitle('VoteCount');
 
 	embed.setThumbnail(guild.iconURL());
-	embed.setColor(Colors.White);
+	embed.setColor(0xf8f98e);
 
 	if (voteCount.voteCounter.majority) {
 		for (const statKey in playerStats) {
@@ -247,19 +240,31 @@ export async function createVoteCountPost(voteCount: VoteCountResponse, guild: G
 
 	if (totalString == '') totalString = 'No Votes';
 
-	embed.setFields({
+	console.log(voteCount.voteCounter.closeAt);
+
+	embed.addFields({
 		name: 'Votes',
 		value: totalString,
 	});
 
+	const additionalNotes: string[] = [];
+
 	if (voteCounter.majority) {
 		const majority = Math.floor(playerCount / 2 + 1);
-
-		embed.addFields({
-			name: 'Majority',
-			value: `> ${playerCount} alive so ${majority} is Majority`,
-		});
+		additionalNotes.push(`> ${playerCount} alive so ${majority} is Majority`);
 	}
+
+	if (voteCount.voteCounter.closeAt) {
+		const timestamp = voteCount.voteCounter.closeAt.getTime() - 60 * 60;
+		additionalNotes.push(`> Action submission deadline <t:${Math.ceil(timestamp / 1000)}:R>`);
+	}
+
+	const totalAdditionalNotes = additionalNotes.join('\n');
+	if (totalAdditionalNotes != '')
+		embed.addFields({
+			name: 'Other',
+			value: totalAdditionalNotes,
+		});
 
 	return embed;
 }
@@ -273,11 +278,14 @@ const createDefaultEvent = (discordId: string): Event => {
 		voteWeight: 1,
 		isUnvoting: false,
 		isVotingFor: null,
+		createdAt: new Date(Date.now()),
 	};
 };
 
-export async function createNewEvent(voteCountId: string, event: PartialEvent) {
+export async function createNewEvent(voteCountId: string, event: EventPartial) {
 	const { canBeVoted, canVote, countsForMajority, playerId, voteWeight, isVotingFor, isUnvoting, createdAt } = event;
+	if (!playerId) return null;
+
 	try {
 		const voteCounter = await database.voteCount.findUnique({
 			where: {

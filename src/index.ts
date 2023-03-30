@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import '@total-typescript/ts-reset';
 import { start as startDeckMafia } from './clients/deckmafia';
 import { start as startdeiMilites } from './clients/deimilites';
 

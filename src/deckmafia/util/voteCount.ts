@@ -255,8 +255,8 @@ export async function createVoteCountPost(voteCount: VoteCountResponse, guild: G
 	}
 
 	if (voteCount.voteCounter.closeAt) {
-		const timestamp = voteCount.voteCounter.closeAt.getTime() - 60 * 60;
-		additionalNotes.push(`> Action submission deadline <t:${Math.ceil(timestamp / 1000)}:R>`);
+		const timestamp = voteCount.voteCounter.closeAt.getTime() - 1000 * 60 * 60;
+		additionalNotes.push(`> Action submission deadline <t:${Math.ceil(timestamp / 1000)}:f>`);
 	}
 
 	const totalAdditionalNotes = additionalNotes.join('\n');

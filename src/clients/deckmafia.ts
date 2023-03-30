@@ -2,7 +2,6 @@ import { Client, Events, GatewayIntentBits, REST } from 'discord.js';
 import path, { join } from 'path';
 import { database, prisma } from '..';
 import config from '../config';
-import { createSignupPost } from '../deckmafia/commands/signups';
 import { checkForRegularVoteCount, checkOnClose } from '../deckmafia/util/onTick';
 import { calculateVoteCount, createVoteCountPost } from '../deckmafia/util/voteCount';
 import { loadCommands, deckMafiaCommands } from '../structures/SlashCommand';
@@ -68,8 +67,8 @@ client.on(Events.InteractionCreate, async (i) => {
 				},
 			});
 
-			const { embed, row } = createSignupPost(updated, i.guild);
-			i.message.edit({ embeds: [embed], components: [row] });
+			// const { embed, row } = createSignupPost(updated, i.guild);
+			// i.message.edit({ embeds: [embed], components: [row] });
 			await i.reply({ content: 'Successfully joined the signup', ephemeral: true });
 		} catch (err) {
 			await i.reply({ content: 'Unable to join signups, try again later', ephemeral: true });
@@ -94,8 +93,8 @@ client.on(Events.InteractionCreate, async (i) => {
 				},
 			});
 
-			const { embed, row } = createSignupPost(updated, i.guild);
-			i.message.edit({ embeds: [embed], components: [row] });
+			// const { embed, row } = createSignupPost(updated, i.guild);
+			// i.message.edit({ embeds: [embed], components: [row] });
 			await i.reply({ content: 'Successfully left the signup, if you were in it.', ephemeral: true });
 		} catch (err) {
 			await i.reply({ content: 'Unable to join signups, try again later', ephemeral: true });

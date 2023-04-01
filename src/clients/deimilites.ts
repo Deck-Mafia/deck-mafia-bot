@@ -44,6 +44,7 @@ client.on(Events.InteractionCreate, async (i) => {
 client.on(Events.InteractionCreate, async (i) => {
 	if (!i.isModalSubmit()) return;
 	const channel = i.channel;
+	if (!channel) return;
 	if (!channel || !channel.isTextBased()) return;
 	const category = (channel as TextChannel).parentId;
 	if (!category) return;

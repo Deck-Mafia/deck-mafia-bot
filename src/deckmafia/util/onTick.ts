@@ -81,9 +81,7 @@ export async function checkForRegularVoteCount({ guild, voteCount }: OnTickProps
 					channel.send({ embeds: [embed] });
 				}
 			}
-		} catch (err) {
-			if (channel.isTextBased()) channel.send('Failed to lock channel. Do not post');
-		}
+		} catch (err) {}
 	}
 
 	return;

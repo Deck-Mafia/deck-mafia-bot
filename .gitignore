@@ -4,3 +4,5 @@ node_modules
 
 build
 .vscode
+src/.DS_Store
+.DS_Store

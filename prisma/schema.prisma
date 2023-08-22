@@ -89,9 +89,9 @@ model Card {
 model OwnedCard {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
   inventory   Inventory @relation(fields: [inventoryId], references: [id])
-  card        Card      @relation(fields: [cardId], references: [id])
+  card        Card?     @relation(fields: [cardId], references: [id])
   inventoryId String    @db.ObjectId
-  cardId      String    @db.ObjectId
+  cardId      String?   @db.ObjectId
 }
 
 model Inventory {

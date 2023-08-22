@@ -6,7 +6,9 @@ import { checkForRegularVoteCount, checkOnClose } from '../deckmafia/util/onTick
 import { calculateVoteCount, createVoteCountPost } from '../deckmafia/util/voteCount';
 import { loadCommands, deckMafiaCommands } from '../structures/SlashCommand';
 
-export const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+export const client = new Client({
+	intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+});
 const deckMafiaRest = new REST({ version: '10' }).setToken(config.discordBotToken);
 
 client.on(Events.ClientReady, async (c) => {
@@ -117,7 +119,7 @@ client.on(Events.InteractionCreate, async (i) => {
 				},
 			});
 
-			if (card) urls.push(card.card.uri);
+			if (card && card.card) urls.push(card.card.uri);
 		}
 
 		for (let index = 0; index < urls.length; index++) {

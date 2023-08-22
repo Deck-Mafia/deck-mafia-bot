@@ -53,7 +53,7 @@ export default newSlashCommand({
 			let value = `\`\`\`diff\nINVENTORY FOR ${user.username.toUpperCase()}\n- ${inventory.ownedCards.length} CARDS TOTAL\n\n`;
 
 			inventory.ownedCards.forEach((ownedCard) => {
-				value += `+ ${ownedCard.card.name}\n`;
+				if (ownedCard.card) value += `+ ${ownedCard.card.name}\n`;
 			});
 
 			value += '```';

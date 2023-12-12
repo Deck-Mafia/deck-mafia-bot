@@ -57,7 +57,7 @@ export default newSlashCommand({
 		} catch (err) {
 			await i.reply({
 				ephemeral: true,
-				content: 'An unexpected error has occurred when fetching this card',
+				content: 'An unexpected error has occurred while running this command. Please contact tech support (aka Cybeastid and MoustachioMario atm)',
 			});
 			console.error(err);
 		}

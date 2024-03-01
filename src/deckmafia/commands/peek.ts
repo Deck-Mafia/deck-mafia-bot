@@ -59,7 +59,7 @@ export default newSlashCommand({
                     new ButtonBuilder().setCustomId('peek-next-page').setLabel('Next Page').setStyle(ButtonStyle.Secondary).setDisabled(page === Math.floor(inventory.ownedCards.length / cardsPerPage))
                 );
 
-                const reply = await i.reply({ content: value, components: [buttonRow.toJSON()], ephemeral: true });
+                const reply = await i.reply({ content: value, components: [buttonRow.toJSON()]});
                 return reply;
             };
 

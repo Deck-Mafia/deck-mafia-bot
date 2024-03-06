@@ -50,7 +50,10 @@ export default newSlashCommand({
             "User does not have an inventory. To make one, use the `/give` command.",
         });
 
+      console.log(inventory);
+
       const cardCounts = inventory.ownedCards.reduce((acc, ownedCard) => {
+        console.log(ownedCard);
         //@ts-ignore
         const cardName = ownedCard.card.name;
         //@ts-ignore

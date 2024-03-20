@@ -8,5 +8,5 @@ export const database = prisma;
 
 (async () => {
 	startDeckMafia();
-	startdeiMilites();
+//	startdeiMilites();
 })();

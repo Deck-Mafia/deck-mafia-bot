@@ -9,6 +9,8 @@ import {
 } from "discord.js";
 import { prisma } from "../..";
 import { newSlashCommand } from "../../structures/SlashCommand";
+import { Card } from '.prisma/client';
+import { send } from 'process';
 
 const cardsPerPage = 25;
 const maxSelectedCards = 25;
@@ -329,7 +331,7 @@ export default newSlashCommand({
           console.log(cardInfo);
 
           const imageUrls = cardInfo.map((card) => `${card.uri}`);
-
+          console.log(imageUrls);
           await i
             .reply({
               content: `\`Cards in Deck "${deck.name}"\``,

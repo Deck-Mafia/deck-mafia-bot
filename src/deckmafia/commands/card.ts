@@ -9,7 +9,7 @@ const c = new SlashCommandBuilder();
 c.setName('view');
 c.setDescription('View a public card');
 c.addStringOption((o) => o.setName('name').setDescription('Name of the card').setRequired(true));
-c.addBooleanOption((i) => i.setName('hidden').setDescription('Do you wanna make this only visible to you? Default is no').setRequired(true));
+c.addBooleanOption((i) => i.setName('hidden').setDescription('Do you wanna make this only visible to you?').setRequired(true));
 
 async function getAllCardNames() {
 	const cards = await prisma.card.findMany({

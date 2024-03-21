@@ -252,9 +252,9 @@ client.on(Events.InteractionCreate, async (i) => {
               channelId: channel.id,
               user1Id: tradeRequest.userId,
               user2Id: i.user.id,
-              user1card1Name: tradeRequest.card1Name,
-              user1card2Name: tradeRequest.card2Name,
-              user1card3Name: tradeRequest.card3Name,
+              user1card1Name: "",
+              user1card2Name: "",
+              user1card3Name: "",
               user2card1Name: "",
               user2card2Name: "",
               user2card3Name: "",
@@ -282,21 +282,13 @@ client.on(Events.InteractionCreate, async (i) => {
             embeds: [
               new EmbedBuilder()
                 .setTitle("Trade Channel")
-                .setDescription(
-                  `**Trade channel created for the card(s):** \`${[
-                    tradeRequest.card1Name,
-                    tradeRequest.card2Name,
-                    tradeRequest.card3Name,
-                  ]
-                    .filter(Boolean)
-                    .join(", ")}\``
-                )
+                .setDescription(`**Trade channel created:**`)
                 .setColor(0x00ff00)
                 .addFields(
                   {
                     name: "Instructions",
                     value:
-                      "* User who accepted the trade must first click the 'Offer Card' button to offer a card to trade.\n* Once both parties are satisfied, both users have to click their respective accept button\n* Once eveyone has accepted, the trade will be done!",
+                      "* Offer the cards you want to trade\n* Once both parties are satisfied, both users have to click their respective accept button\n* Once eveyone has accepted, the trade will be done!",
                   },
                   {
                     name: `${i.user.username}'s offer:`,
@@ -305,14 +297,7 @@ client.on(Events.InteractionCreate, async (i) => {
                   },
                   {
                     name: `${user.username}'s offer:`,
-                    value: `\`${[
-                      tradeRequest.card1Name,
-                      tradeRequest.card2Name,
-                      tradeRequest.card3Name,
-                    ]
-                      .filter(Boolean)
-                      .join(", ")}\``,
-                    inline: true,
+                    value: "`None`",
                   },
                   {
                     name: `${truncatedIUsername} accepted:`,
@@ -329,8 +314,12 @@ client.on(Events.InteractionCreate, async (i) => {
             components: [
               new ActionRowBuilder<ButtonBuilder>().setComponents(
                 new ButtonBuilder()
-                  .setCustomId(`trade_offer_${tradeRequest.id}`)
-                  .setLabel("Offer Card(s)")
+                  .setCustomId(`trade_offer_${i.user.id}_${tradeRequest.id}`)
+                  .setLabel(`${truncatedIUsername} Offer`)
+                  .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                  .setCustomId(`trade_offer_${user.id}_${tradeRequest.id}`)
+                  .setLabel(`${truncatedUserUsername} Offer`)
                   .setStyle(ButtonStyle.Success)
               ),
               new ActionRowBuilder<ButtonBuilder>().setComponents(
@@ -464,7 +453,7 @@ client.on(Events.InteractionCreate, async (i) => {
       });
     }
   } else if (i.customId.startsWith("trade_offer")) {
-    const tradeRequestId = i.customId.replace("trade_offer_", "");
+    const [action, action1, userId, tradeRequestId] = i.customId.split("_");
 
     const tradeRequest = await prisma.tradeRequest.findUnique({
       where: { id: tradeRequestId },
@@ -478,10 +467,10 @@ client.on(Events.InteractionCreate, async (i) => {
       return;
     }
 
-    if (i.user.id == tradeRequest.userId) {
+    if (userId !== i.user.id) {
       i.reply({
         ephemeral: true,
-        content: "You have already offered a card to trade!",
+        content: "You can only use your own offer button!",
       });
       return;
     }
@@ -630,9 +619,8 @@ client.on(Events.InteractionCreate, async (i) => {
                   await i.message.edit({ embeds: [embed] });
                 }
               }
-
               //@ts-ignore
-              const channelId = m.channel.id;
+              const channelId = i.channel.id;
 
               const tradeChannels = await prisma.tradeChannel.findMany({
                 where: {
@@ -641,31 +629,40 @@ client.on(Events.InteractionCreate, async (i) => {
               });
 
               if (tradeChannels.length > 0) {
-                const tradeChannelToUpdate = tradeChannels[0];
+                const tradeChannel = tradeChannels[0];
+                const userId = i.user.id;
+                const isUser1 = userId === tradeChannel.user1Id;
+                console.log(isUser1);
 
-                await prisma.tradeChannel.update({
-                  where: { id: tradeChannelToUpdate.id },
-                  //@ts-ignore
-                  data: {
-                    user2card1Name: cardNames[0] || "",
-                    user2card2Name: cardNames[1] || "",
-                    user2card3Name: cardNames[2] || "",
-                  },
+                if (isUser1) {
+                  await prisma.tradeChannel.update({
+                    where: { id: tradeChannel.id },
+                    data: {
+                      user1card1Name: cardNames[0] || "",
+                      user1card2Name: cardNames[1] || "",
+                      user1card3Name: cardNames[2] || "",
+                    },
+                  });
+                } else {
+                  await prisma.tradeChannel.update({
+                    where: { id: tradeChannel.id },
+                    data: {
+                      user2card1Name: cardNames[0] || "",
+                      user2card2Name: cardNames[1] || "",
+                      user2card3Name: cardNames[2] || "",
+                    },
+                  });
+                }
+
+                return m.reply({
+                  ephemeral: true,
+                  content: `You have added the card(s) \`${cardNames.join(
+                    ", "
+                  )}\` to the trade.`,
                 });
-              } else {
-                console.error(
-                  "TradeChannel records not found for channelId:",
-                  channelId
-                );
               }
-
-              return m.reply({
-                ephemeral: true,
-                content: `You have added the card(s) \`${cardNames.join(
-                  ", "
-                )}\` to the trade.`,
-              });
             } catch (e) {
+              console.log(e);
               await m.reply({
                 ephemeral: true,
                 content: "The trade request has timed out. Please try again.",

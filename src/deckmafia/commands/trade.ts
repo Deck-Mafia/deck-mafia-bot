@@ -16,27 +16,7 @@ const c = new SlashCommandBuilder();
 c.setName("trade");
 c.setDescription("View all the trade commands!");
 c.addSubcommand((x) =>
-  x
-    .setName("request")
-    .setDescription("Request a trade for a specific card")
-    .addStringOption((x) =>
-      x
-        .setName("firstcard")
-        .setDescription("First card you want to trade")
-        .setRequired(true)
-    )
-    .addStringOption((x) =>
-      x
-        .setName("secondcard")
-        .setDescription("Second card you want to trade")
-        .setRequired(false)
-    )
-    .addStringOption((x) =>
-      x
-        .setName("thirdcard")
-        .setDescription("Third card you want to trade")
-        .setRequired(false)
-    )
+  x.setName("request").setDescription("Request a trade to trade cards")
 );
 
 c.addSubcommand((x) =>
@@ -67,19 +47,8 @@ export default newSlashCommand({
     switch (i.options.getSubcommand(true)) {
       case "request":
         try {
-          const card1Name = i.options.getString("firstcard");
-          let card2Name = i.options.getString("secondcard") || null;
-          let card3Name = i.options.getString("thirdcard") || null;
           const serverId = i.guild?.id;
           const userId = i.user.id;
-
-          if (!card2Name) {
-            card2Name = "";
-          }
-
-          if (!card3Name) {
-            card3Name = "";
-          }
 
           const tradeSetup = await prisma.tradeSetup.findFirst({
             where: { serverId: serverId },
@@ -109,40 +78,9 @@ export default newSlashCommand({
             },
           });
 
-          const requestedCards = [card1Name, card2Name, card3Name].filter(
-            Boolean
-          );
-
-          for (const requestedCard of requestedCards) {
-            const requestedQuantity = requestedCards.filter(
-              (card) => card === requestedCard
-            ).length;
-
-            const ownsRequestedCard =
-              inventory?.ownedCards.filter(
-                //@ts-ignore
-                (ownedCard) => ownedCard.card.name === requestedCard
-              ).length || 0;
-
-            if (ownsRequestedCard < requestedQuantity) {
-              return i.reply({
-                ephemeral: true,
-                content: `You don't own enough of the card ${requestedCard} for the trade.`,
-              });
-            }
-          }
-
           const existingRequest = await prisma.tradeRequest.findFirst({
             where: {
               userId: i.user.id,
-              OR: [
-                //@ts-ignore
-                { card1Name: card1Name },
-                //@ts-ignore
-                { card2Name: card2Name },
-                //@ts-ignore
-                { card3Name: card3Name },
-              ],
               serverId: serverId,
             },
           });
@@ -155,46 +93,17 @@ export default newSlashCommand({
             });
           }
 
-          const cardInfo1 = await prisma.card.findUnique({
-            //@ts-ignore
-            where: { name: card1Name },
-            select: { uri: true, isPublic: true },
-          });
-
-          const cardInfo2 = await prisma.card.findUnique({
-            //@ts-ignore
-            where: { name: card2Name },
-            select: { uri: true, isPublic: true },
-          });
-
-          const cardInfo3 = await prisma.card.findUnique({
-            //@ts-ignore
-            where: { name: card3Name },
-            select: { uri: true, isPublic: true },
-          });
-
-          if (
-            cardInfo1?.isPublic == false ||
-            cardInfo2?.isPublic == false ||
-            cardInfo3?.isPublic == false
-          ) {
-            return i.reply({
-              ephemeral: true,
-              content:
-                "You can only trade public cards! If you want to trade secret cards, please contact staff!",
-            });
-          }
           await i.deferReply({ ephemeral: true });
 
           const tradeRequest = await prisma.tradeRequest.create({
             data: {
               userId: userId,
               //@ts-ignore
-              card1Name: card1Name,
+              card1Name: "",
               //@ts-ignore
-              card2Name: card2Name,
+              card2Name: "",
               //@ts-ignore
-              card3Name: card3Name,
+              card3Name: "",
               //@ts-ignore
               serverId: serverId,
               //@ts-ignore
@@ -203,33 +112,11 @@ export default newSlashCommand({
             },
           });
 
-          const cardArray = [card1Name, card2Name, card3Name];
-          const stackedCards = cardArray.reduce((acc, card) => {
-            if (!card) return acc;
-            const existingCard = acc.find((c) => c.name === card);
-            if (existingCard) {
-              existingCard.count++;
-            } else {
-              acc.push({ name: card, count: 1 });
-            }
-            return acc;
-          }, [] as { name: string; count: number }[]);
-
-          const description = stackedCards
-            .map(
-              (stack) =>
-                `${stack.name} ${stack.count > 1 ? `(x${stack.count})` : ""}`
-            )
-            .join("\n");
-
           const message = await i.channel?.send({
             embeds: [
               new EmbedBuilder()
                 .setTitle("Trade Request")
-                .setDescription(
-                  `${i.user.username} is looking to trade the following cards!`
-                )
-                .addFields({ name: "Card(s)", value: description })
+                .setDescription(`${i.user.username} is looking to trade cards!`)
                 .addFields({ name: "User", value: `<@${userId}>` })
                 .setColor("Blue")
                 .setTimestamp(),
@@ -247,11 +134,6 @@ export default newSlashCommand({
                   .setStyle(ButtonStyle.Danger)
               ),
             ],
-            files: [
-              cardInfo1?.uri || "",
-              cardInfo2?.uri || "",
-              cardInfo3?.uri || "",
-            ].filter(Boolean), // Exclude empty URIs
           });
 
           await prisma.tradeRequest.update({

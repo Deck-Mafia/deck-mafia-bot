@@ -40,7 +40,7 @@ export default newSlashCommand({
 
     try {
       const fetchedCard = await prisma.card.findFirst({
-        where: { name: cardName.toLowerCase(), isPublic: false },
+        where: { name: cardName.toLowerCase() },
       });
 
       if (!fetchedCard) {

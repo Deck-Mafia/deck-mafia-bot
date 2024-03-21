@@ -14,7 +14,21 @@ const c = new SlashCommandBuilder();
 c.setName("fuse").setDescription("Fuse commands");
 
 c.addSubcommand((x) =>
-  x.setName("request").setDescription("Make a request to fuse cards")
+  x
+    .setName("request")
+    .setDescription("Make a request to fuse cards")
+    .addStringOption((option) =>
+      option
+        .setName("card1")
+        .setDescription("The first card to fuse")
+        .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName("card2")
+        .setDescription("The second card to fuse")
+        .setRequired(true)
+    )
 );
 
 c.addSubcommand((x) =>
@@ -91,6 +105,9 @@ async function handleRequest(i: ChatInputCommandInteraction) {
 
   const queuePosition = await prisma.fuseQueue.count();
 
+  const cardName1 = i.options.getString("card1", true);
+  const cardName2 = i.options.getString("card2", true);
+
   await prisma.fuseQueue.create({
     data: {
       userId: i.user.id,
@@ -129,7 +146,7 @@ async function handleRequest(i: ChatInputCommandInteraction) {
     const embed = new EmbedBuilder()
       .setTitle("Fuse Request")
       .setDescription(
-        `User <@${i.user.id}> has requested to fuse cards. Respond to the request using /fuse done`
+        `User <@${i.user.id}> has requested to fuse cards \`${cardName1}\` and \`${cardName2}\`. Respond to the request using \`/fuse done\``
       )
       .setColor("Blue");
 
@@ -224,7 +241,7 @@ async function handleDone(i: ChatInputCommandInteraction) {
 
   let decisionMessage = "";
   if (acceptedOption) {
-    decisionMessage = `The fuse request for <@${nextInQueue.userId}> has been accepted. Wait for staff to contact you!`;
+    decisionMessage = `The fuse request for <@${nextInQueue.userId}> has been accepted and processed successfully.`;
   } else {
     decisionMessage = `The fuse request for <@${nextInQueue.userId}> has been denied. `;
   }

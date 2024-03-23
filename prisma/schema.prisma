@@ -60,6 +60,7 @@ model VoteCount {
   closeAt      DateTime?
   lastPeriod   DateTime      @default(now())
   createdAt    DateTime      @default(now())
+  voters       String[]     
 }
 
 model ActionEvent {
@@ -86,6 +87,14 @@ model Card {
   ownedCards OwnedCard[]
 }
 
+model CardDeck {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  cards     Json[]    
+  ownerId   String   
+  verified  Boolean 
+}
+
 model OwnedCard {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
   inventory   Inventory @relation(fields: [inventoryId], references: [id])
@@ -101,6 +110,60 @@ model Inventory {
 }
 
 // DEI MILITES
+
+model FuseQueue {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String
+  position Int
+}
+
+model FuseSystem {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  guildId   String  @unique
+  channelId String
+  statusChannelId String
+}
+
+model TradeRequest {
+  id         String     @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String
+  card1Name   String
+  card2Name   String
+  card3Name   String
+  serverId   String
+  channelId  String
+  messageId  String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+model TradeChannel {
+  id         String     @id @default(auto()) @map("_id") @db.ObjectId
+  serverId   String
+  channelId  String
+  user1Id    String
+  user2Id    String
+  user1card1Name  String
+  user1card2Name  String
+  user1card3Name  String
+  user2card1Name  String
+  user2card2Name  String
+  user2card3Name  String
+  user1Accepted  Boolean
+  user2Accepted  Boolean
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+
+model TradeSetup {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  serverId     String
+  categoryId   String
+  everyone     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
 
 model DeiMilitesGame {
   id             String             @id @default(auto()) @map("_id") @db.ObjectId
@@ -177,3 +240,5 @@ model Item {
   hidden           String?
   deiMilitesGameId String             @db.ObjectId
 }
+
+

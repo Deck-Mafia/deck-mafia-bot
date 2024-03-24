@@ -17,7 +17,15 @@ export default newSlashCommand({
 				where: {
 					name: name.toLowerCase(),
 				},
+// NEW CODE: REMOVE NULLS FROM INVENTORIES.
 			});
+			
+			const response2 = await prisma.ownedcard.delete({
+				where: {
+					cardId:null,
+				},
+			});
+			
 
 			await i.reply({ content: `\`${name}\` has been deleted. If this was a mistake, run the \`add\` command again to add it back` });
 		} catch (err) {

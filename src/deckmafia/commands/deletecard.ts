@@ -20,7 +20,7 @@ export default newSlashCommand({
 // NEW CODE: REMOVE NULLS FROM INVENTORIES.
 			});
 			
-			const response2 = await prisma.ownedcard.delete({
+			const response2 = await prisma.ownedCard.delete({
 				where: {
 					cardId:null,
 				},

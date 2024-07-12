@@ -208,7 +208,7 @@ export default newSlashCommand({
         await i.reply({
           ephemeral: true,
           content:
-            "An unexpected error has occurred while running this command. Please contact tech support.",
+            "An unexpected error has occurred while running this command. Please contact tech support. (Error Code: 2)",
         });
         console.error(err);
       }
@@ -385,7 +385,7 @@ export default newSlashCommand({
         await i.reply({
           ephemeral: true,
           content:
-            "An unexpected error has occurred while running this command. Please contact tech support.",
+            "An unexpected error has occurred while running this command. Please contact tech support. (Error Code: 3)",
         });
         console.error(err);
       }

@@ -42,7 +42,7 @@ export default newSlashCommand({
 			try {
 				let partial: EventPartial = {
 					playerId: i.user.id,
-					isVotingFor: null,
+					isVotingFor: i.client.user.id,
 				};
 
 				const event = await createNewEvent(voteCounter.id, partial);

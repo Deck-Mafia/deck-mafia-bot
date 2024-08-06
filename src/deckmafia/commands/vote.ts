@@ -31,17 +31,18 @@ export default newSlashCommand({
 		const isUnvoting = i.options.getBoolean('unvote', false);
 
 		if (isUnvoting) {
-			const votedId = null;
+			/* const votedId = i.client.user.id;
 
 			await i.guild.members.fetch();
 
 			const votedMember = i.guild.members.cache.get(votedId);
+			*/
 			const votingMember = i.guild.members.cache.get(i.user.id);
 
 			try {
 				let partial: EventPartial = {
 					playerId: i.user.id,
-					isVotingFor: votedId,
+					isVotingFor: null,
 				};
 
 				const event = await createNewEvent(voteCounter.id, partial);

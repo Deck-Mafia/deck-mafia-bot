@@ -259,12 +259,14 @@ export async function createVoteCountPost(
 */
   for (const statKey in playerStats) {
     const stat = playerStats[statKey];
-    if (stat.isVotingFor === null) nonVotingPlayers.push(stat.playerId);
+    if (stat.isVotingFor === null) nonVotingPlayers.push(`<@${stat.playerId}>`);
   }
+  if nonVotingPlayers != "" {
     totalString += `**Non-voting players:** *${nonVotingPlayers.join(
       ", "
     )}*\n\n`;
-  // }
+  
+  }
 
   if (Object.keys(wagons).length === 0) {
     totalString += "`No Votes`";

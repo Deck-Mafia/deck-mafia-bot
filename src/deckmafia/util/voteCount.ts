@@ -237,17 +237,18 @@ export async function createVoteCountPost(
 
   let totalString = "";
 
-  const aliveRoleId = voteCounter.livingRoleId;
+ /* const aliveRoleId = voteCounter.livingRoleId;
 
   const aliveRole = guild.roles.cache.get(aliveRoleId);
-
+*/
   const nonVotingPlayers: string[] = [];
-  const allPlayers = Array.from(guild.members.cache.keys());
+/*  const allPlayers = Array.from(guild.members.cache.keys());
   const voters = Object.keys(wagons);
   const nonVoters = allPlayers.filter(
     //@ts-ignore
     (player) => !voters.includes(player) && aliveRole.members.has(player)
   );
+
 
   if (nonVoters.length > 0) {
     nonVoters.forEach((nonVoter) => {
@@ -255,7 +256,11 @@ export async function createVoteCountPost(
       if (nonVoterMember) nonVotingPlayers.push(nonVoterMember.displayName);
       else nonVotingPlayers.push(`<@${nonVoter}>`);
     });
-
+*/
+  for (const statKey in playerStats) {
+    const stat = playerStats[statKey];
+    if (stat.isVotingFor === null) nonVotingPlayers.push(stat.playerId);
+  }
     totalString += `**Non-voting players:** *${nonVotingPlayers.join(
       ", "
     )}*\n\n`;

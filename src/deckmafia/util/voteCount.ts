@@ -261,7 +261,7 @@ export async function createVoteCountPost(
     const stat = playerStats[statKey];
     if (stat.isVotingFor === null) nonVotingPlayers.push(`<@${stat.playerId}>`);
   }
-  if (nonVotingPlayers != []) {
+  if (nonVotingPlayers.length > 0) {
     totalString += `**Non-voting players:** *${nonVotingPlayers.join(
       ", "
     )}*\n\n`;

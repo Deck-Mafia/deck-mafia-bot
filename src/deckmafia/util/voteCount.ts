@@ -259,7 +259,7 @@ export async function createVoteCountPost(
 */
   for (const statKey in playerStats) {
     const stat = playerStats[statKey];
-    if (stat.isVotingFor === i.client.user.id) nonVotingPlayers.push(`<@${stat.playerId}>`);
+    if (stat.isVotingFor === '1061684614797742190') nonVotingPlayers.push(`<@${stat.playerId}>`);
   }
   if (nonVotingPlayers.length > 0) {
     totalString += `**Non-voting players:** *${nonVotingPlayers.join(
@@ -334,7 +334,7 @@ const createDefaultEvent = (discordId: string): Event => {
     countsForMajority: true,
     voteWeight: 1,
     isUnvoting: false,
-    isVotingFor: i.client.user.id,
+    isVotingFor: '1061684614797742190',
     createdAt: new Date(Date.now()),
   };
 };

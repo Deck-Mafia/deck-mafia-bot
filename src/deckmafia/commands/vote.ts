@@ -31,7 +31,7 @@ export default newSlashCommand({
 		const isUnvoting = i.options.getBoolean('unvote', false);
 
 		if (isUnvoting) {
-			const votedId = i.client.user.id;
+			const votedId = null;
 
 			await i.guild.members.fetch();
 
@@ -45,7 +45,7 @@ export default newSlashCommand({
 				};
 
 				const event = await createNewEvent(voteCounter.id, partial);
-				await i.reply(`**${votingMember?.displayName ?? i.user.username}** has voted for **${votedMember?.displayName}**`);
+				await i.reply(`**${votingMember?.displayName ?? i.user.username}** has removed their vote`);
 
 				const data = await calculateVoteCount(voteCounter.id);
 				if (!data) throw Error();

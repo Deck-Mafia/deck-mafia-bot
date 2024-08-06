@@ -237,10 +237,10 @@ export async function createVoteCountPost(
 
   let totalString = "";
 
- /* const aliveRoleId = voteCounter.livingRoleId;
+  const aliveRoleId = voteCounter.livingRoleId;
 
   const aliveRole = guild.roles.cache.get(aliveRoleId);
-*/
+
   const nonVotingPlayers: string[] = [];
 /*  const allPlayers = Array.from(guild.members.cache.keys());
   const voters = Object.keys(wagons);
@@ -259,7 +259,7 @@ export async function createVoteCountPost(
 */
   for (const statKey in playerStats) {
     const stat = playerStats[statKey];
-    if (stat.isVotingFor === null) nonVotingPlayers.push(`<@${stat.playerId}>`);
+    if (stat.isVotingFor === i.client.user.id) nonVotingPlayers.push(`<@${stat.playerId}>`);
   }
   if (nonVotingPlayers.length > 0) {
     totalString += `**Non-voting players:** *${nonVotingPlayers.join(
@@ -334,7 +334,7 @@ const createDefaultEvent = (discordId: string): Event => {
     countsForMajority: true,
     voteWeight: 1,
     isUnvoting: false,
-    isVotingFor: null,
+    isVotingFor: i.client.user.id,
     createdAt: new Date(Date.now()),
   };
 };

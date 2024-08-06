@@ -45,10 +45,7 @@ export default newSlashCommand({
 				};
 
 				const event = await createNewEvent(voteCounter.id, partial);
-				await i.reply(`**${votingMember?.displayName ?? i.user.username}** has removed their vote`);
-				await i.reply(
-					`**${votingMember?.displayName ?? i.user.username}** has voted for **${votedMember?.displayName ?? votedUser.username}**`
-				);
+				await i.reply(`**${votingMember?.displayName ?? i.user.username}** has voted for **${votedMember?.displayName ?? votedUser.username}**`);
 
 				const data = await calculateVoteCount(voteCounter.id);
 				if (!data) throw Error();

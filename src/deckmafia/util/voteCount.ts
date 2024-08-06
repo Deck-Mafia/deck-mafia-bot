@@ -264,7 +264,7 @@ export async function createVoteCountPost(
     totalString += `**Non-voting players:** *${nonVotingPlayers.join(
       ", "
     )}*\n\n`;
-  }
+  // }
 
   if (Object.keys(wagons).length === 0) {
     totalString += "`No Votes`";

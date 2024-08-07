@@ -70,6 +70,7 @@ export default newSlashCommand({
 			await i.guild.members.fetch();
 
 			const votedMember = i.guild.members.cache.get(votedId);
+			if (!votedMember?.roles.cache.some((r) => r.name === 'Alive' || r.name === 'Alive 2')) { return await i.reply({ content: 'You may only vote for players who are alive.', ephemeral: true })};
 			const votingMember = i.guild.members.cache.get(i.user.id);
 
 			try {

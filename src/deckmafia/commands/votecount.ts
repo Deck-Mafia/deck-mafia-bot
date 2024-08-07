@@ -11,7 +11,7 @@ export default newSlashCommand({
 	data: c,
 	async execute(i: ChatInputCommandInteraction) {
 		if (!i.guild) return;
-		await i.deferReply();
+		await i.deferReply({ ephemeral: true });
 		const parentId = (i.channel as TextChannel).parentId;
 		if (!parentId) return;
 

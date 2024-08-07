@@ -242,12 +242,13 @@ export async function createVoteCountPost(
   const aliveRole = guild.roles.cache.get(aliveRoleId);
 
   const nonVotingPlayers: string[] = [];
-  const allPlayers = Array.from(guild.members.cache.keys());
+/*  const allPlayers = Array.from(guild.members.cache.keys());
   const voters = Object.keys(wagons);
   const nonVoters = allPlayers.filter(
     //@ts-ignore
     (player) => !voters.includes(player) && aliveRole.members.has(player)
   );
+
 
   if (nonVoters.length > 0) {
     nonVoters.forEach((nonVoter) => {
@@ -255,10 +256,16 @@ export async function createVoteCountPost(
       if (nonVoterMember) nonVotingPlayers.push(nonVoterMember.displayName);
       else nonVotingPlayers.push(`<@${nonVoter}>`);
     });
-
+*/
+  for (const statKey in playerStats) {
+    const stat = playerStats[statKey];
+    if (stat.isVotingFor === '1061684614797742190') nonVotingPlayers.push(`<@${stat.playerId}>`);
+  }
+  if (nonVotingPlayers.length > 0) {
     totalString += `**Non-voting players:** *${nonVotingPlayers.join(
       ", "
     )}*\n\n`;
+  
   }
 
   if (Object.keys(wagons).length === 0) {
@@ -327,7 +334,7 @@ const createDefaultEvent = (discordId: string): Event => {
     countsForMajority: true,
     voteWeight: 1,
     isUnvoting: false,
-    isVotingFor: null,
+    isVotingFor: '1061684614797742190',
     createdAt: new Date(Date.now()),
   };
 };

@@ -31,27 +31,28 @@ export default newSlashCommand({
 		const isUnvoting = i.options.getBoolean('unvote', false);
 
 		if (isUnvoting) {
-			const votedId = i.client.user.id;
+			/* const votedId = i.client.user.id;
 
 			await i.guild.members.fetch();
 
 			const votedMember = i.guild.members.cache.get(votedId);
+			*/
 			const votingMember = i.guild.members.cache.get(i.user.id);
 
 			try {
 				let partial: EventPartial = {
 					playerId: i.user.id,
-					isVotingFor: votedId,
+					isVotingFor: i.client.user.id,
 				};
 
 				const event = await createNewEvent(voteCounter.id, partial);
-				await i.reply(`**${votingMember?.displayName ?? i.user.username}** has voted for **${votedMember?.displayName}**`);
+				await i.reply(`**${votingMember?.displayName ?? i.user.username}** has removed their vote`);
 
 				const data = await calculateVoteCount(voteCounter.id);
 				if (!data) throw Error();
 
 				const voteCount = await createVoteCountPost(data, i.guild);
-				await i.followUp({ embeds: [voteCount] });
+				await i.followUp({ embeds: [voteCount], ephemeral:true });
 			} catch (err) {
 				console.log(err);
 				await i.reply({
@@ -86,7 +87,7 @@ export default newSlashCommand({
 				if (!data) throw Error();
 
 				const voteCount = await createVoteCountPost(data, i.guild);
-				await i.followUp({ embeds: [voteCount] });
+				await i.followUp({ embeds: [voteCount], ephemeral:true });
 			} catch (err) {
 				console.log(err);
 				await i.reply({

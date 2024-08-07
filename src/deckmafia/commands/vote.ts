@@ -52,7 +52,7 @@ export default newSlashCommand({
 				if (!data) throw Error();
 
 				const voteCount = await createVoteCountPost(data, i.guild);
-				await i.followUp({ embeds: [voteCount] });
+				await i.followUp({ embeds: [voteCount], ephemeral:true });
 			} catch (err) {
 				console.log(err);
 				await i.reply({
@@ -87,7 +87,7 @@ export default newSlashCommand({
 				if (!data) throw Error();
 
 				const voteCount = await createVoteCountPost(data, i.guild);
-				await i.followUp({ embeds: [voteCount] });
+				await i.followUp({ embeds: [voteCount], ephemeral:true });
 			} catch (err) {
 				console.log(err);
 				await i.reply({

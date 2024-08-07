@@ -31,17 +31,18 @@ export default newSlashCommand({
 		const isUnvoting = i.options.getBoolean('unvote', false);
 
 		if (isUnvoting) {
-			const votedId = i.client.user.id;
+			/* const votedId = i.client.user.id;
 
 			await i.guild.members.fetch();
 
 			const votedMember = i.guild.members.cache.get(votedId);
+			*/
 			const votingMember = i.guild.members.cache.get(i.user.id);
 
 			try {
 				let partial: EventPartial = {
 					playerId: i.user.id,
-					isVotingFor: votedId,
+					isVotingFor: i.client.user.id,
 				};
 
 				const event = await createNewEvent(voteCounter.id, partial);
@@ -51,7 +52,7 @@ export default newSlashCommand({
 				if (!data) throw Error();
 
 				const voteCount = await createVoteCountPost(data, i.guild);
-				await i.followUp({ embeds: [voteCount], ephemeral: true });
+				await i.followUp({ embeds: [voteCount], ephemeral:true });
 			} catch (err) {
 				console.log(err);
 				await i.reply({
@@ -69,6 +70,7 @@ export default newSlashCommand({
 			await i.guild.members.fetch();
 
 			const votedMember = i.guild.members.cache.get(votedId);
+			if (!votedMember?.roles.cache.some((r) => r.name === 'Alive' || r.name === 'Alive 2')) { return await i.reply({ content: 'You may only vote for players who are alive.', ephemeral: true })};
 			const votingMember = i.guild.members.cache.get(i.user.id);
 
 			try {
@@ -86,7 +88,7 @@ export default newSlashCommand({
 				if (!data) throw Error();
 
 				const voteCount = await createVoteCountPost(data, i.guild);
-				await i.followUp({ embeds: [voteCount], ephemeral: true });
+				await i.followUp({ embeds: [voteCount], ephemeral:true });
 			} catch (err) {
 				console.log(err);
 				await i.reply({

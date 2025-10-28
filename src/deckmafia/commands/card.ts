@@ -59,7 +59,7 @@ export default newSlashCommand({
     const cardName = i.options.getString('name', true);
     const ephemeral = i.options.getBoolean('hidden') ?? true;
 
-    await i.deferReply({ ephemeral });
+    await i.deferReply({ ephemeral: ephemeral });
 
     try {
       const fetchedCard = await prisma.card.findFirst({

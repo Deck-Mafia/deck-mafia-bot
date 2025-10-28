@@ -55,11 +55,12 @@ async function getAllPrivateCards(discordId: string) {
 
 export default newSlashCommand({
 	data: c,
-	async execute(i: ChatInputCommandInteraction) {
-  const cardName = i.options.get('name', true).value as string;
-  const ephemeral = i.options.get('hidden', true).value as boolean;
+async execute(i: ChatInputCommandInteraction) {
+  const cardName = i.options.getString('name', true);
+  const ephemeral = i.options.getBoolean('hidden', true) ?? false;
 
-  await i.deferReply({ ephemeral }); // ← Defer immediately
+  // Defer immediately with correct ephemeral setting
+  await i.deferReply({ ephemeral });
 
   try {
     const fetchedCard = await prisma.card.findFirst({
@@ -93,10 +94,14 @@ export default newSlashCommand({
     return sendCard(i, fetchedCard);
 
   } catch (err) {
-    console.error(err);
+    console.error('Error in /view command:', err);
+
+    // Always use editReply since we deferred
     await i.editReply({
       content: 'An unexpected error occurred while fetching this card.',
-    }).catch(() => {});
+    }).catch(() => {
+      // Ignore if already deleted/expired
+    });
   }
 }
 

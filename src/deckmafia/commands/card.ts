@@ -56,51 +56,50 @@ async function getAllPrivateCards(discordId: string) {
 export default newSlashCommand({
 	data: c,
 	async execute(i: ChatInputCommandInteraction) {
-		const cardName = i.options.get('name', true).value as string;
-		const ephemeral = i.options.get('hidden', true).value as boolean;
-		try {
-			const fetchedCard = await prisma.card.findFirst({
-				where: {
-					name: cardName.toLowerCase(),
-					isPublic: true,
-				},
-			});
+  const cardName = i.options.get('name', true).value as string;
+  const ephemeral = i.options.get('hidden', true).value as boolean;
 
-			if (!fetchedCard) {
-				const allPublicCardNames = await getAllCardNames();
-				const allCards: string[] = allPublicCardNames;
-				const privateCards = await getAllPrivateCards(i.user.id);
-				if (privateCards[cardName]) {
-					return sendCard(i, privateCards[cardName], ephemeral);
-				} else {
-					const privateKeys = Object.keys(privateCards);
-					privateKeys.forEach((key) => {
-						if (!allCards.includes(key)) allCards.push(key);
-					});
+  await i.deferReply({ ephemeral }); // ← Defer immediately
 
-					if (allCards.length > 0) {
-						const closestCardName = await getClosestCardName(cardName, allCards);
-						const closestPublicCardName = await getClosestCardName(cardName, allPublicCardNames);
-						let message = `No card was found with that name. If you're referring to a public card, did you mean \`${closestPublicCardName.bestMatch.target}\`?`;
-						if (closestPublicCardName.bestMatch.target != closestCardName.bestMatch.target) message += `\nIf you were trying to find a privately owned/hidden one, did you mean${closestCardName.bestMatch.target} `;
-						return await i.reply({ content: message, ephemeral: true });
-					} else {
-						return await i.reply({ content: `No card was found with that name.`, ephemeral: true });
-					}
-				}
-			} else {
-				return sendCard(i, fetchedCard, ephemeral);
-			}
-		} catch (err) {
-			await i.reply({
-				ephemeral: true,
-				content: 'An unexpected error has occurred when fetching this card',
-			});
-			console.error(err);
-		}
-	},
-});
+  try {
+    const fetchedCard = await prisma.card.findFirst({
+      where: { name: cardName.toLowerCase(), isPublic: true },
+    });
 
-async function sendCard(i: CommandInteraction, card: Card, ephemeral: boolean) {
-	return await i.reply({ content: card.uri, ephemeral: ephemeral });
+    if (!fetchedCard) {
+      const allPublicCardNames = await getAllCardNames();
+      const allCards = [...allPublicCardNames];
+      const privateCards = await getAllPrivateCards(i.user.id);
+
+      if (privateCards[cardName]) {
+        return sendCard(i, privateCards[cardName]);
+      }
+
+      Object.keys(privateCards).forEach((key) => {
+        if (!allCards.includes(key)) allCards.push(key);
+      });
+
+      let message = 'No card was found with that name.';
+      if (allCards.length > 0) {
+        const { bestMatch: c1 } = await getClosestCardName(cardName, allCards);
+        const { bestMatch: c2 } = await getClosestCardName(cardName, allPublicCardNames);
+        message = `Did you mean \`${c2.target}\` (public)`;
+        if (c1.target !== c2.target) message += ` or \`${c1.target}\` (private)?`;
+      }
+
+      return await i.editReply({ content: message });
+    }
+
+    return sendCard(i, fetchedCard);
+
+  } catch (err) {
+    console.error(err);
+    await i.editReply({
+      content: 'An unexpected error occurred while fetching this card.',
+    }).catch(() => {});
+  }
+}
+
+async function sendCard(i: CommandInteraction, card: Card) {
+  await i.editReply({ content: card.uri });
 }

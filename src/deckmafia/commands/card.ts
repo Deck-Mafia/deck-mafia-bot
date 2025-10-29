@@ -68,7 +68,7 @@ const VIEW_TIMEOUT_MS = parseInt(process.env.VIEW_TIMEOUT_MS ?? '2500', 10);
 function removeTrailingQuestion(str: string): string {
   return str.replace(/\?$/, '');
 }
-
+const cardNotFound = `No card of that name found in public database or user's cards. Searching for close matches...`
 // === DEBUG CONFIG ===
 // Show processing time only when debug is enabled
 const SHOW_PROCESSING_TIME = VIEW_DEBUG;
@@ -226,9 +226,9 @@ export default newSlashCommand({
       }
 
       const timeMsg = getTimeMessage(performance.now() - startTime);
-      const fullMessage = `${message}\n${timeMsg}`;
-      // We have already deferred and shown a "Processing..." message — send suggestions as a followUp
-      return await safeFollowUp({ content: fullMessage, ephemeral: true });
+      const fullMessage = `${cardNotFound}\n${message}\n${timeMsg}`;
+      // We have already deferred and shown a "Card Not Found" message — add a new line and send suggestions.
+      return await safeEdit({ content: fullMessage, ephemeral: true });
     } catch (err) {
       console.error('Error in /view command:', err);
       const timeMsg = getTimeMessage(performance.now() - startTime);

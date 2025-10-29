@@ -64,41 +64,110 @@ export default newSlashCommand({
     const startTime = performance.now(); // High-precision timer
     let deferred = false;
 
+    // safe wrappers to avoid throwing on Unknown interaction and to keep single reply semantics
+    const safeReply = async (payload: { content: string; ephemeral?: boolean }) => {
+      try {
+        if (i.deferred) {
+          // If already deferred, edit the reply instead of replying
+          return await i.editReply({ content: payload.content });
+        }
+        return await i.reply({ content: payload.content, ephemeral: payload.ephemeral });
+      } catch (e: any) {
+        console.error('Failed to reply (safeReply):', e?.message ?? e);
+        // swallow DiscordAPIError to avoid crashing the process
+        return null;
+      }
+    };
+
+    const safeEdit = async (content: string) => {
+      try {
+        return await i.editReply({ content });
+      } catch (e: any) {
+        console.error('Failed to editReply (safeEdit):', e?.message ?? e);
+        return null;
+      }
+    };
+
     try {
       const cardNameLower = cardName.toLowerCase();
 
-      // Start only the fast lookups first: public exact and private exact
-      const [fetchedCard, privateCards] = await Promise.all([
-        prisma.card.findFirst({ where: { name: cardNameLower, isPublic: true } }),
-        getAllPrivateCards(i.user.id),
-      ]);
+  /*
+   * Exact vs Heavy split:
+   * - Exact lookups: targeted findFirst queries for public card and private ownership. These are designed
+   *   to be minimal and fast (select only necessary fields) so the common exact-match path can reply
+   *   immediately without deferring.
+   * - Heavy work: fetching all public card names and the full private card list (for fuzzy suggestions)
+   *   can be slow for large datasets. We delay this until after we've acknowledged the interaction
+   *   (via deferReply) to avoid hitting Discord's interaction timeout (~3s). This keeps the user-facing
+   *   exact-match experience fast while still providing suggestions when needed.
+   */
+  // Start only the fast lookups first: public exact and private exact (don't await yet)
+  // Use targeted queries (select minimal fields) so these are fast even with large datasets.
+      const publicExactPromise = prisma.card.findFirst({
+        where: { name: cardNameLower, isPublic: true },
+        select: { uri: true, name: true },
+      });
+      const privateExactPromise = prisma.card.findFirst({
+        where: {
+          name: cardNameLower,
+          ownedCards: { some: { inventory: { discordId: i.user.id } } },
+        },
+        select: { uri: true, name: true },
+      });
+
+      // Wait for exact lookups but only up to a short timeout to avoid interaction expiry
+      const EXACT_TIMEOUT_MS = 2500; // 3s Discord timeout with ~0.5s buffer
+      const exactPromise = Promise.all([publicExactPromise, privateExactPromise]);
+      const timeoutPromise = new Promise((res) => setTimeout(() => res('timeout'), EXACT_TIMEOUT_MS));
+      const raced = (await Promise.race([exactPromise, timeoutPromise])) as any;
+      let fetchedPublic: any | null = null;
+      let fetchedPrivateExact: any | null = null;
+
+      if (raced === 'timeout') {
+        // exact checks are still running -> defer now to acknowledge interaction
+        await i.deferReply({ ephemeral: true });
+        deferred = true;
+        // await remaining exact results
+        [fetchedPublic, fetchedPrivateExact] = await exactPromise;
+      } else {
+        // exactPromise finished within timeout
+        [fetchedPublic, fetchedPrivateExact] = raced as [any, any];
+      }
 
       const elapsed = performance.now() - startTime;
 
-      // FIRST: exact-match lookups (fast). Do them before deferring.
-      if (privateCards[cardNameLower]) {
+      // FIRST: exact-match lookups (fast). If we already deferred above, use editReply via safeEdit
+      // If the user has the private exact card, return it immediately
+      if (fetchedPrivateExact) {
         const timeMsg = getTimeMessage(performance.now() - startTime);
-        const content = `${privateCards[cardNameLower].uri}\n${timeMsg}`;
-        return await i.reply({ content, ephemeral: userWantsEphemeral });
+        const content = `${fetchedPrivateExact.uri}\n${timeMsg}`;
+        if (deferred) return await safeEdit(content);
+        return await safeReply({ content, ephemeral: userWantsEphemeral });
       }
 
-      if (fetchedCard) {
+      // If a public exact card exists, return it immediately
+      if (fetchedPublic) {
         const timeMsg = getTimeMessage(performance.now() - startTime);
-        const content = `${fetchedCard.uri}\n${timeMsg}`;
-        return await i.reply({ content, ephemeral: userWantsEphemeral });
+        const content = `${fetchedPublic.uri}\n${timeMsg}`;
+        if (deferred) return await safeEdit(content);
+        return await safeReply({ content, ephemeral: userWantsEphemeral });
       }
 
-      // NOTHING exact matched: defer now (once) and continue with heavier fuzzy work
-      await i.deferReply({ ephemeral: true });
-      deferred = true;
+      // NOTHING exact matched: if we haven't deferred yet, defer now and show processing
+      if (!deferred) {
+        await i.deferReply({ ephemeral: true });
+        deferred = true;
+      }
       const timeMsgStart = getTimeMessage(elapsed);
-      await i.editReply({ content: [`Processing...`, ``, `${timeMsgStart}`].join('\n') });
+      await safeEdit([`Processing...`, ``, `${timeMsgStart}`].join('\n'));
 
-      // Now perform the heavier fetching for suggestions (public names + merge private names)
-      const allPublicCardNames = await getAllCardNames();
-      const allCardsSet = new Set<string>(allPublicCardNames);
-      Object.values(privateCards).forEach((card) => allCardsSet.add(card.name));
-      const allCards = Array.from(allCardsSet);
+  // Now perform the heavier fetching for suggestions (public names + merge private names)
+  const allPublicCardNames = await getAllCardNames();
+  // fetch full private cards list for suggestions (this can be heavier)
+  const allPrivateCards = await getAllPrivateCards(i.user.id);
+  const allCardsSet = new Set<string>(allPublicCardNames);
+  Object.values(allPrivateCards).forEach((card) => allCardsSet.add(card.name));
+  const allCards = Array.from(allCardsSet);
 
       // No direct hit -> suggestions
       let message = 'No card was found with that name.';
@@ -114,7 +183,7 @@ export default newSlashCommand({
 
       const timeMsg = getTimeMessage(performance.now() - startTime);
       const fullMessage = `${message}\n${timeMsg}`;
-      return await i.editReply({ content: fullMessage });
+      return await safeEdit(fullMessage);
     } catch (err) {
       console.error('Error in /view command:', err);
       const timeMsg = getTimeMessage(performance.now() - startTime);

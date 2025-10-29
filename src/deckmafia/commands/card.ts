@@ -52,14 +52,18 @@ async function getAllPrivateCards(discordId: string) {
 	});
 	return allPrivateCards;
 }
+function removeTrailingQuestion(str: string): string {
+  return str.replace(/\?$/, '');
+}
 
 export default newSlashCommand({
   data: c,
   async execute(i: ChatInputCommandInteraction) {
     const cardName = i.options.getString('name', true);
-    const ephemeral = i.options.getBoolean('hidden') ?? true;
+    const makeCardEphemeral = i.options.getBoolean('hidden') ?? true;
 
-    await i.deferReply({ ephemeral: ephemeral });
+    // Defer once — creates a public "thinking..." message
+    await i.deferReply();
 
     try {
       const fetchedCard = await prisma.card.findFirst({
@@ -71,10 +75,12 @@ export default newSlashCommand({
         const allCards = [...allPublicCardNames];
         const privateCards = await getAllPrivateCards(i.user.id);
 
+        // 1. Private card exists → send with user privacy setting
         if (privateCards[cardName]) {
-          return sendCard(i, privateCards[cardName]);
+          return sendCard(i, privateCards[cardName], makeCardEphemeral);
         }
 
+        // 2. Build suggestion list
         Object.keys(privateCards).forEach((key) => {
           if (!allCards.includes(key)) allCards.push(key);
         });
@@ -83,24 +89,42 @@ export default newSlashCommand({
         if (allCards.length > 0) {
           const { bestMatch: c1 } = await getClosestCardName(cardName, allCards);
           const { bestMatch: c2 } = await getClosestCardName(cardName, allPublicCardNames);
-          message = `Did you mean \`${c2.target}\` (public)`;
-          if (c1.target !== c2.target) message += ` or \`${c1.target}\` (private)?`;
+          message = `Did you mean \`${c2.target}\``?;
+          if (c1.target !== c2.target) {
+		  	message = removeTrailingQuestion(message) + ` or \`${c1.target}\` (private)?`;
         }
 
-        return await i.editReply({ content: message });
+        // 3. Always ephemeral suggestion
+        return await i.followUp({
+          content: message,
+          ephemeral: true,
+        });
       }
 
-      return sendCard(i, fetchedCard);
+      // 4. Public card found → send with user privacy setting
+      return sendCard(i, fetchedCard, makeCardEphemeral);
 
     } catch (err) {
       console.error('Error in /view command:', err);
-      await i.editReply({
+
+      // 5. Always public error
+      return await i.editReply({
         content: 'An unexpected error occurred while fetching this card.',
-      }).catch(() => {});
+      });
     }
   },
 });
 
-async function sendCard(i: CommandInteraction, card: Card) {
-  await i.editReply({ content: card.uri });
+/**
+ * Reusable: Send a card with correct visibility
+ */
+async function sendCard(
+  i: ChatInputCommandInteraction,
+  card: Card,
+  ephemeral: boolean
+) {
+  await i.followUp({
+    content: card.uri,
+    ephemeral,
+  });
 }

@@ -62,7 +62,6 @@ export default newSlashCommand({
     const cardName = i.options.getString('name', true);
     const makeCardEphemeral = i.options.getBoolean('hidden') ?? true;
 
-    // Defer once — creates a public "thinking..." message
     await i.deferReply();
 
     try {
@@ -75,12 +74,10 @@ export default newSlashCommand({
         const allCards = [...allPublicCardNames];
         const privateCards = await getAllPrivateCards(i.user.id);
 
-        // 1. Private card exists → send with user privacy setting
         if (privateCards[cardName]) {
           return sendCard(i, privateCards[cardName], makeCardEphemeral);
         }
 
-        // 2. Build suggestion list
         Object.keys(privateCards).forEach((key) => {
           if (!allCards.includes(key)) allCards.push(key);
         });
@@ -89,25 +86,25 @@ export default newSlashCommand({
         if (allCards.length > 0) {
           const { bestMatch: c1 } = await getClosestCardName(cardName, allCards);
           const { bestMatch: c2 } = await getClosestCardName(cardName, allPublicCardNames);
-          message = `Did you mean \`${c2.target}\``?;
+
+          // Fixed: closed backticks
+          message = `Did you mean \`${c2.target}\``;
+
           if (c1.target !== c2.target) {
-		  	message = removeTrailingQuestion(message) + ` or \`${c1.target}\` (private)?`;
+            message = removeTrailingQuestion(message) + ` or \`${c1.target}\` (private)?`;
+          }
         }
 
-        // 3. Always ephemeral suggestion
         return await i.followUp({
           content: message,
           ephemeral: true,
         });
       }
 
-      // 4. Public card found → send with user privacy setting
       return sendCard(i, fetchedCard, makeCardEphemeral);
 
     } catch (err) {
       console.error('Error in /view command:', err);
-
-      // 5. Always public error
       return await i.editReply({
         content: 'An unexpected error occurred while fetching this card.',
       });
@@ -115,9 +112,6 @@ export default newSlashCommand({
   },
 });
 
-/**
- * Reusable: Send a card with correct visibility
- */
 async function sendCard(
   i: ChatInputCommandInteraction,
   card: Card,

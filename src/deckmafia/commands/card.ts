@@ -51,10 +51,18 @@ async function getAllPrivateCards(discordId: string) {
   return allPrivateCards;
 }
 
-// Debug flag: enable special testing inputs when this is true.
-// This is a local toggle (not read from process.env). Set to `true` locally while
-// developing to enable special debug tokens (see below). Keep `false` in production.
-const DEBUG_VIEW = false;
+// Configuration from environment (with sensible defaults):
+// - VIEW_DEBUG: when 'true' enables special debug tokens that simulate errors.
+// - VIEW_TIMEOUT_MS: exact-lookup timeout (ms) before deferring. Default 2500ms.
+const VIEW_DEBUG = (() => {
+  const v = process.env.VIEW_DEBUG;
+  if (typeof v === 'string') {
+    const norm = v.trim().toLowerCase();
+    return ['true', '1', 'yes', 'on'].includes(norm);
+  }
+  return Boolean(v);
+})();
+const VIEW_TIMEOUT_MS = parseInt(process.env.VIEW_TIMEOUT_MS ?? '2500', 10);
 
 
 function removeTrailingQuestion(str: string): string {
@@ -62,7 +70,8 @@ function removeTrailingQuestion(str: string): string {
 }
 
 // === DEBUG CONFIG ===
-const SHOW_PROCESSING_TIME = true; // Set to false to disable
+// Show processing time only when debug is enabled
+const SHOW_PROCESSING_TIME = VIEW_DEBUG;
 
 export default newSlashCommand({
   data: c,
@@ -101,10 +110,10 @@ export default newSlashCommand({
       const cardNameLower = cardName.toLowerCase();
 
       // Debug triggers: special inputs to simulate errors
-      // Only active when DEBUG_VIEW is true (set DEBUG_VIEW=true in env)
+      // Only active when VIEW_DEBUG is true (set VIEW_DEBUG in env)
       const PREDEF_TOKEN = '__err_predef';
       const POSTDEF_TOKEN = '__err_postdef';
-      if (DEBUG_VIEW && cardNameLower === PREDEF_TOKEN) {
+      if (VIEW_DEBUG && cardNameLower === PREDEF_TOKEN) {
         // simulate an error before any deferral/acknowledgement
         throw new Error('Simulated pre-deferral error');
       }
@@ -179,7 +188,7 @@ export default newSlashCommand({
         deferred = true;
       }
       // after deferral, optionally simulate an error (for testing post-defer error handling)
-      if (DEBUG_VIEW && cardNameLower === POSTDEF_TOKEN) {
+      if (VIEW_DEBUG && cardNameLower === POSTDEF_TOKEN) {
         throw new Error('Simulated post-deferral error');
       }
       const timeMsgStart = getTimeMessage(elapsed);

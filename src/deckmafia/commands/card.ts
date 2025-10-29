@@ -97,6 +97,15 @@ export default newSlashCommand({
       }
     };
 
+    const safeFollowUp = async (payload: { content: string; ephemeral?: boolean }) => {
+      try {
+        return await i.followUp({ content: payload.content, ephemeral: payload.ephemeral });
+      } catch (e: any) {
+        console.error('Failed to followUp (safeFollowUp):', e?.message ?? e);
+        return null;
+      }
+    };
+
     const safeEdit = async (content: string) => {
       try {
         return await i.editReply({ content });
@@ -182,7 +191,8 @@ export default newSlashCommand({
         return await safeReply({ content, ephemeral: userWantsEphemeral });
       }
 
-      // NOTHING exact matched: if we haven't deferred yet, defer now and show processing
+      // NOTHING exact matched: Always defer/acknowledge before doing heavier fuzzy work.
+      // This guarantees we never reply and then later defer (which is invalid).
       if (!deferred) {
         await i.deferReply({ ephemeral: true });
         deferred = true;
@@ -192,6 +202,7 @@ export default newSlashCommand({
         throw new Error('Simulated post-deferral error');
       }
       const timeMsgStart = getTimeMessage(elapsed);
+      // show a short processing message in the deferred reply while we compute suggestions
       await safeEdit([`No card of that name found in public database or user's cards. Searching for close matches...`, ``, `${timeMsgStart}`].join('\n'));
 
   // Now perform the heavier fetching for suggestions (public names + merge private names)
@@ -216,7 +227,8 @@ export default newSlashCommand({
 
       const timeMsg = getTimeMessage(performance.now() - startTime);
       const fullMessage = `${message}\n${timeMsg}`;
-      return await safeEdit(fullMessage);
+      // We have already deferred and shown a "Processing..." message — send suggestions as a followUp
+      return await safeFollowUp({ content: fullMessage, ephemeral: true });
     } catch (err) {
       console.error('Error in /view command:', err);
       const timeMsg = getTimeMessage(performance.now() - startTime);

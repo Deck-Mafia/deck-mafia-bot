@@ -228,7 +228,7 @@ export default newSlashCommand({
       const timeMsg = getTimeMessage(performance.now() - startTime);
       const fullMessage = `${cardNotFound}\n${message}\n${timeMsg}`;
       // We have already deferred and shown a "Card Not Found" message — add a new line and send suggestions.
-      return await safeEdit({fullMessage});
+      return await safeEdit(fullMessage);
     } catch (err) {
       console.error('Error in /view command:', err);
       const timeMsg = getTimeMessage(performance.now() - startTime);

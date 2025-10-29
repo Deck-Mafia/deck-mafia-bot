@@ -17,8 +17,15 @@ async function getAllCardNames() {
 }
 
 async function getClosestCardName(cardName: string, list: string[]) {
-  console.log(cardName, list);
-  return stringSimilarity.findBestMatch(cardName, list);
+  const result = stringSimilarity.findBestMatch(cardName, list);
+  // Log only the query and the top candidates to avoid excessive output
+  const topN = 5;
+  const top = [...result.ratings]
+    .sort((a: any, b: any) => b.rating - a.rating)
+    .slice(0, topN)
+    .map((r: any) => ({ target: r.target, rating: r.rating }));
+  console.log({ query: cardName, top });
+  return result;
 }
 
 async function getAllPrivateCards(discordId: string) {
@@ -60,17 +67,11 @@ export default newSlashCommand({
     try {
       const cardNameLower = cardName.toLowerCase();
 
-      // Start lookup of public card, private cards, and public names in parallel
-      const [fetchedCard, privateCards, allPublicCardNames] = await Promise.all([
+      // Start only the fast lookups first: public exact and private exact
+      const [fetchedCard, privateCards] = await Promise.all([
         prisma.card.findFirst({ where: { name: cardNameLower, isPublic: true } }),
         getAllPrivateCards(i.user.id),
-        getAllCardNames(),
       ]);
-
-      // Build suggestion list (DB is lowercase; use a Set to avoid duplicates efficiently)
-      const allCardsSet = new Set<string>(allPublicCardNames);
-      Object.values(privateCards).forEach((card) => allCardsSet.add(card.name));
-      const allCards = Array.from(allCardsSet);
 
       const elapsed = performance.now() - startTime;
 
@@ -92,6 +93,12 @@ export default newSlashCommand({
       deferred = true;
       const timeMsgStart = getTimeMessage(elapsed);
       await i.editReply({ content: [`Processing...`, ``, `${timeMsgStart}`].join('\n') });
+
+      // Now perform the heavier fetching for suggestions (public names + merge private names)
+      const allPublicCardNames = await getAllCardNames();
+      const allCardsSet = new Set<string>(allPublicCardNames);
+      Object.values(privateCards).forEach((card) => allCardsSet.add(card.name));
+      const allCards = Array.from(allCardsSet);
 
       // No direct hit -> suggestions
       let message = 'No card was found with that name.';

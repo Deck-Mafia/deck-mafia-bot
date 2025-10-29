@@ -60,116 +60,100 @@ export default newSlashCommand({
   data: c,
   async execute(i: ChatInputCommandInteraction) {
     const cardName = i.options.getString('name', true);
-    const makeCardEphemeral = i.options.getBoolean('hidden') ?? true;
+    const userWantsEphemeral = i.options.getBoolean('hidden') ?? true;
 
     const startTime = Date.now();
+    let deferred = false;
 
     try {
-      // === PHASE 1: Fast check for exact public match ===
+      // PHASE 1: Fast public lookup
       const fetchedCard = await prisma.card.findFirst({
         where: { name: cardName.toLowerCase(), isPublic: true },
       });
 
-      // If we found a card and we're still under 2.5s → reply immediately
-      if (fetchedCard && Date.now() - startTime < 2500) {
+      const elapsed = Date.now() - startTime;
+
+      // Fast path: reply immediately
+      if (fetchedCard && elapsed < 2500) {
         return await i.reply({
           content: fetchedCard.uri,
-          ephemeral: makeCardEphemeral,
+          ephemeral: userWantsEphemeral,
         });
       }
 
-      // === PHASE 2: Heavy work (private cards, fuzzy search) ===
-      const allPublicCardNames = await getAllCardNames();
-      const allCards = [...allPublicCardNames];
-      const privateCards = await getAllPrivateCards(i.user.id);
+      // Too slow → defer with EPHEMERAL
+      if (!deferred && elapsed >= 2500) {
+        await i.deferReply({ ephemeral: true });
+        deferred = true;
 
-      const elapsed = Date.now() - startTime;
-
-      // === PHASE 3: Decide: defer or reply? ===
-      if (elapsed >= 2500) {
-        // Too slow → defer with correct visibility
-        await i.deferReply({ ephemeral: makeCardEphemeral });
-
-        // Show warning in the deferred message
         await i.editReply({
           content: [
-            `Warning: This command took longer than 3 seconds to process.`,
-            `Using deferred response to avoid timeout.`,
+            'Warning: This took longer than 3 seconds.',
+            'Response is now **ephemeral only** due to deferral.',
             '',
-            fetchedCard ? fetchedCard.uri : 'Processing...',
+            'Processing...',
           ].join('\n'),
         });
       }
 
-      // === PHASE 4: Handle no card found ===
-      if (!fetchedCard) {
-        if (privateCards[cardName]) {
-          const content = privateCards[cardName].uri;
-          if (elapsed < 2500) {
-            return await i.reply({ content, ephemeral: makeCardEphemeral });
-          } else {
-            return await i.followUp({ content, ephemeral: makeCardEphemeral });
-          }
-        }
+      // PHASE 2: Heavy work
+      const allPublicCardNames = await getAllCardNames();
+      const allCards = [...allPublicCardNames];
+      const privateCards = await getAllPrivateCards(i.user.id);
 
-        // Build suggestion
-        Object.keys(privateCards).forEach((key) => {
-          if (!allCards.includes(key)) allCards.push(key);
-        });
-
-        let message = 'No card was found with that name.';
-        if (allCards.length > 0) {
-          const { bestMatch: c1 } = await getClosestCardName(cardName, allCards);
-          const { bestMatch: c2 } = await getClosestCardName(cardName, allPublicCardNames);
-          message = `Did you mean \`${c2.target}\``;
-          if (c1.target !== c2.target) {
-            message = removeTrailingQuestion(message) + ` or \`${c1.target}\` (private)?`;
-          }
-        }
-
-        // Always ephemeral suggestion
-        if (elapsed < 2500) {
-          return await i.reply({ content: message, ephemeral: true });
+      // Private card found
+      if (privateCards[cardName]) {
+        const content = privateCards[cardName].uri;
+        if (deferred) {
+          return await i.editReply({ content });
         } else {
-          return await i.followUp({ content: message, ephemeral: true });
+          return await i.reply({ content, ephemeral: userWantsEphemeral });
         }
       }
 
-      // === PHASE 5: Public card found (after heavy work) ===
-      if (elapsed < 2500) {
-        return await i.reply({
-          content: fetchedCard!.uri,
-          ephemeral: makeCardEphemeral,
-        });
+      // Build suggestion
+      Object.keys(privateCards).forEach((key) => {
+        if (!allCards.includes(key)) allCards.push(key);
+      });
+
+      let message = 'No card was found with that name.';
+      if (allCards.length > 0) {
+        const { bestMatch: c1 } = await getClosestCardName(cardName, allCards);
+        const { bestMatch: c2 } = await getClosestCardName(cardName, allPublicCardNames);
+        message = `Did you mean \`${c2.target}\``;
+        if (c1.target !== c2.target) {
+          message = removeTrailingQuestion(message) + ` or \`${c1.target}\` (private)?`;
+        }
+      }
+
+      // Send suggestion (always ephemeral)
+      if (deferred) {
+        return await i.followUp({ content: message, ephemeral: true });
       } else {
-        return await i.followUp({
-          content: fetchedCard!.uri,
-          ephemeral: makeCardEphemeral,
-        });
+        return await i.reply({ content: message, ephemeral: true });
+      }
+
+      // Public card found (after heavy work)
+      if (fetchedCard) {
+        if (deferred) {
+          return await i.editReply({ content: fetchedCard!.uri }); // ← ! here
+        } else {
+          return await i.reply({ content: fetchedCard!.uri, ephemeral: userWantsEphemeral });
+        }
       }
 
     } catch (err) {
       console.error('Error in /view command:', err);
 
-      const elapsed = Date.now() - startTime;
-
-      if (elapsed < 2500) {
-        return await i.reply({
+      if (deferred) {
+        return await i.editReply({
           content: 'An unexpected error occurred while fetching this card.',
-          ephemeral: false,
         });
       } else {
-        // If deferred, edit the public message
-        if (i.deferred) {
-          return await i.editReply({
-            content: 'An unexpected error occurred while fetching this card.',
-          });
-        } else {
-          return await i.reply({
-            content: 'An unexpected error occurred while fetching this card.',
-            ephemeral: false,
-          });
-        }
+        return await i.reply({
+          content: 'An unexpected error occurred while fetching this card. If you are seeing this message, please screenshot it and send it to Cybeast along with, preferably, a timestamp.',
+          ephemeral: true,
+        });
       }
     }
   },

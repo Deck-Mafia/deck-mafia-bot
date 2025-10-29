@@ -51,6 +51,12 @@ async function getAllPrivateCards(discordId: string) {
   return allPrivateCards;
 }
 
+// Debug flag: enable special testing inputs when this is true.
+// This is a local toggle (not read from process.env). Set to `true` locally while
+// developing to enable special debug tokens (see below). Keep `false` in production.
+const DEBUG_VIEW = false;
+
+
 function removeTrailingQuestion(str: string): string {
   return str.replace(/\?$/, '');
 }
@@ -93,6 +99,15 @@ export default newSlashCommand({
 
     try {
       const cardNameLower = cardName.toLowerCase();
+
+      // Debug triggers: special inputs to simulate errors
+      // Only active when DEBUG_VIEW is true (set DEBUG_VIEW=true in env)
+      const PREDEF_TOKEN = '__err_predef';
+      const POSTDEF_TOKEN = '__err_postdef';
+      if (DEBUG_VIEW && cardNameLower === PREDEF_TOKEN) {
+        // simulate an error before any deferral/acknowledgement
+        throw new Error('Simulated pre-deferral error');
+      }
 
   /*
    * Exact vs Heavy split:
@@ -162,6 +177,10 @@ export default newSlashCommand({
       if (!deferred) {
         await i.deferReply({ ephemeral: true });
         deferred = true;
+      }
+      // after deferral, optionally simulate an error (for testing post-defer error handling)
+      if (DEBUG_VIEW && cardNameLower === POSTDEF_TOKEN) {
+        throw new Error('Simulated post-deferral error');
       }
       const timeMsgStart = getTimeMessage(elapsed);
       await safeEdit([`Processing...`, ``, `${timeMsgStart}`].join('\n'));

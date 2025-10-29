@@ -30,6 +30,9 @@ async function getClosestCardName(cardName: string, list: string[]) {
 
 async function getAllPrivateCards(discordId: string) {
   const fetchedCards = await prisma.card.findMany({
+    // Fetch all cards owned by the user (including public/private). The targeted exact lookup
+    // earlier is restricted to isPublic:false for speed; the full list can be heavier and
+    // should include all owned cards for comprehensive suggestions.
     where: {
       ownedCards: {
         some: {
@@ -107,9 +110,11 @@ export default newSlashCommand({
         where: { name: cardNameLower, isPublic: true },
         select: { uri: true, name: true },
       });
+      // Private exact lookup: restrict to non-public cards owned by this user
       const privateExactPromise = prisma.card.findFirst({
         where: {
           name: cardNameLower,
+          isPublic: false,
           ownedCards: { some: { inventory: { discordId: i.user.id } } },
         },
         select: { uri: true, name: true },

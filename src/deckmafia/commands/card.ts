@@ -192,7 +192,7 @@ export default newSlashCommand({
         throw new Error('Simulated post-deferral error');
       }
       const timeMsgStart = getTimeMessage(elapsed);
-      await safeEdit([`Processing...`, ``, `${timeMsgStart}`].join('\n'));
+      await safeEdit([`No card of that name found in public database or user's cards. Searching for close matches...`, ``, `${timeMsgStart}`].join('\n'));
 
   // Now perform the heavier fetching for suggestions (public names + merge private names)
   const allPublicCardNames = await getAllCardNames();

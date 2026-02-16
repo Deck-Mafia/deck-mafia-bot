@@ -123,8 +123,8 @@ client.on(Events.InteractionCreate, async (i) => {
 		}
 
 		for (let index = 0; index < urls.length; index++) {
-			if (i.channel) {
-				i.channel.send({ content: `[${index + 1}/${urls.length}]<@${i.user.id}> has submitted\n${urls[index]}` });
+			if (i.channel?.isTextBased() && !i.channel.isDMBased()) {
+				await i.channel.send({ content: `[${index + 1}/${urls.length}]<@${i.user.id}> has submitted\n${urls[index]}` });
 			}
 		}
 

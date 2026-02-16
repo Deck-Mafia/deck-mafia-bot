@@ -112,6 +112,7 @@ export default newSlashCommand({
             },
           });
 
+	if (i.channel?.isTextBased() && !i.channel.isDMBased()) {
           const message = await i.channel?.send({
             embeds: [
               new EmbedBuilder()
@@ -135,6 +136,7 @@ export default newSlashCommand({
               ),
             ],
           });
+	}
 
           await prisma.tradeRequest.update({
             where: { id: tradeRequest.id },

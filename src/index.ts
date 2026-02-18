@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import 'dotenv/config'; #added to import my .env file
 import { PrismaClient } from '@prisma/client';
 import '@total-typescript/ts-reset';
 import { start as startDeckMafia } from './clients/deckmafia';

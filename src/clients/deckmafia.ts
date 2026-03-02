@@ -138,21 +138,22 @@ client.on(Events.ShardDisconnect, (e, id) => {
 
 export async function start() {
 	await client.login(config.discordBotToken);
-	tick(client);
-}
+	setInterval(async () => {
+			try{
+			await tick(client);
+		}	catch (err) {
+			console.error('[TICK ERROR]', err);
+		}
+	}, 10000); // every 10 seconds
+}	
 
 async function tick(client: Client) {
 	const activeVoteCounts = await database.voteCount.findMany({ where: { active: true } });
 	await client.guilds.fetch();
-
 	for (const voteCount of activeVoteCounts) {
 		const { guildId, channelId, closeAt, id } = voteCount;
 		const guild = client.guilds.cache.get(guildId);
 		if (guild && closeAt) await checkOnClose({ guild, voteCount });
 		if (guild && voteCount.lastPeriod) await checkForRegularVoteCount({ guild, voteCount });
 	}
-
-	setTimeout(() => {
-		tick(client);
-	}, 1000 * 10);
 }

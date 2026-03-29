@@ -1,13 +1,12 @@
-import { ChatInputCommandInteraction, CommandInteraction, SlashCommandBuilder, TextChannel } from 'discord.js';
-import { database, prisma } from '../..';
-import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
+import { ChatInputCommandInteraction, SlashCommandBuilder, TextChannel } from 'discord.js';
+import { MessageFlags } from "discord.js";
+import { newSlashCommand } from '../../structures/SlashCommand';
 import {
-	calculateVoteCount,
-	checkGameInCategory,
-	checkVoteCountInChannel,
-	createNewEvent,
-	createVoteCountPost,
-	EventPartial,
+    calculateVoteCount,
+    checkVoteCountInChannel,
+    createNewEvent,
+    createVoteCountPost,
+    EventPartial,
 } from '../util/voteCount';
 
 const c = new SlashCommandBuilder();
@@ -18,84 +17,81 @@ c.addUserOption((user) => user.setName('player').setDescription('Player you wish
 c.addBooleanOption((bool) => bool.setName('unvote').setDescription('Unvote for a player').setRequired(false));
 
 export default newSlashCommand({
-	data: c,
-	async execute(i: ChatInputCommandInteraction) {
-		if (!i.guild) return;
-		const parentId = (i.channel as TextChannel).parentId;
-		if (!parentId) return;
-		const voteCounter = await checkVoteCountInChannel(i.channelId);
-		if (!voteCounter)
-			return await i.reply({ content: 'You cannot vote with the bot in a channel without an automated vote counter', ephemeral: true });
+    data: c,
+    async execute(i: ChatInputCommandInteraction) {
+        if (!i.guild) return;
 
-		const votedUser = i.options.getUser('player', false);
-		const isUnvoting = i.options.getBoolean('unvote', false);
+        // 1. ACKNOWLEDGE IMMEDIATELY
+        // Moving this to the absolute top is good, but we can also use a try/catch
+        // to handle cases where the Pi was too slow to even defer.
+        try {
+            await i.deferReply();
+        } catch (e: any) {
+            console.warn(`[VOTE] Failed to defer: ${e.message}`);
+            return; // Interaction is already dead, no point in continuing
+        }
 
-		if (isUnvoting) {
-			/* const votedId = i.client.user.id;
+        try {
+            // 2. RUN INDEPENDENT TASKS IN PARALLEL
+            // Instead of waiting for one then the other, do both at once.
+            const [voteCounter, votingMember] = await Promise.all([
+                checkVoteCountInChannel(i.channelId),
+                i.guild.members.fetch(i.user.id)
+            ]);
 
-			await i.guild.members.fetch();
+            if (!voteCounter) {
+                return await i.editReply({ 
+                    content: 'You cannot vote in a channel without an active vote counter.' 
+                });
+            }
 
-			const votedMember = i.guild.members.cache.get(votedId);
-			*/
-			const votingMember = i.guild.members.cache.get(i.user.id);
+            const votedUser = i.options.getUser('player', false);
+            const isUnvoting = i.options.getBoolean('unvote', false);
 
-			try {
-				let partial: EventPartial = {
-					playerId: i.user.id,
-					isVotingFor: i.client.user.id,
-				};
+            // 3. LOGIC FOR UNVOTE / VOTE
+            let targetId = i.client.user!.id; // Default to Bot ID (Unvote)
+            let successMessage = `**${votingMember?.displayName ?? i.user.username}** has removed their vote`;
 
-				const event = await createNewEvent(voteCounter.id, partial);
-				await i.reply(`**${votingMember?.displayName ?? i.user.username}** has removed their vote`);
+            if (!isUnvoting && votedUser) {
+                // Surgical fetch for the target to check roles
+                const votedMember = await i.guild.members.fetch(votedUser.id);
+                const hasAliveRole = votedMember.roles.cache.some(r => r.name === 'Alive' || r.name === 'Alive 2');
 
-				const data = await calculateVoteCount(voteCounter.id);
-				if (!data) throw Error();
+                if (!hasAliveRole) {
+                    return await i.editReply({ content: 'You may only vote for players who are alive.' });
+                }
 
-				const voteCount = await createVoteCountPost(data, i.guild);
-				await i.followUp({ embeds: [voteCount], ephemeral:true });
-			} catch (err) {
-				console.log(err);
-				await i.reply({
-					ephemeral: true,
-					content: 'Vote failed to occur. Please contact the host ASAP with who you wanted to vote if this continues.',
-				});
-			}
-		} else if (votedUser) {
-			const votedId = votedUser.id;
+                targetId = votedUser.id;
+                successMessage = `**${votingMember?.displayName ?? i.user.username}** has voted for **${votedMember?.displayName ?? votedUser.username}**`;
+            }
 
-			const voteCounter = await checkVoteCountInChannel(i.channelId);
-			if (!voteCounter)
-				return await i.reply({ content: 'You cannot vote with the bot in a channel without an automated vote counter', ephemeral: true });
+            // 4. DATABASE & RE-CALCULATION
+            await createNewEvent(voteCounter.id, {
+                playerId: i.user.id,
+                isVotingFor: targetId,
+            });
 
-			await i.guild.members.fetch();
+            // 5. UPDATE USER
+            await i.editReply(successMessage);
 
-			const votedMember = i.guild.members.cache.get(votedId);
-			if (!votedMember?.roles.cache.some((r) => r.name === 'Alive' || r.name === 'Alive 2')) { return await i.reply({ content: 'You may only vote for players who are alive.', ephemeral: true })};
-			const votingMember = i.guild.members.cache.get(i.user.id);
+            // 6. POST UPDATED EMBED (NON-BLOCKING)
+            // We don't necessarily need to "await" the final followUp to finish 
+            // the command, but on a Pi, it's safer to keep it sequential.
+            const data = await calculateVoteCount(voteCounter.id, i.guild);
+            if (data) {
+                const voteCountEmbed = await createVoteCountPost(data, i.guild);
+                await i.followUp({ 
+                    embeds: [voteCountEmbed], 
+                    flags: [MessageFlags.Ephemeral] 
+                });
+            }
 
-			try {
-				let partial: EventPartial = {
-					playerId: i.user.id,
-					isVotingFor: votedId,
-				};
-
-				const event = await createNewEvent(voteCounter.id, partial);
-				await i.reply(
-					`**${votingMember?.displayName ?? i.user.username}** has voted for **${votedMember?.displayName ?? votedUser.username}**`
-				);
-
-				const data = await calculateVoteCount(voteCounter.id);
-				if (!data) throw Error();
-
-				const voteCount = await createVoteCountPost(data, i.guild);
-				await i.followUp({ embeds: [voteCount], ephemeral:true });
-			} catch (err) {
-				console.log(err);
-				await i.reply({
-					ephemeral: true,
-					content: 'Vote failed to occur. Please contact the host ASAP with who you wanted to vote if this continues.',
-				});
-			}
-		}
-	},
+        } catch (err) {
+            console.error('[VOTE ERROR]', err);
+            // Check if interaction is still valid before editing reply
+            if (i.deferred || i.replied) {
+                await i.editReply({ content: 'Vote failed. Please try again in a moment.' });
+            }
+        }
+    },
 });

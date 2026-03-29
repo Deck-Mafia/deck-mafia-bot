@@ -3,6 +3,7 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
 } from "discord.js";
+import { MessageFlags } from "discord.js";
 import { prisma } from "../..";
 import { newSlashCommand } from "../../structures/SlashCommand";
 
@@ -35,7 +36,7 @@ export default newSlashCommand({
           return i.reply({
             content:
               "You must be an administrator to discard a card in others' inventory!",
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
 
@@ -73,7 +74,7 @@ export default newSlashCommand({
       if (!inventory || inventory.ownedCards.length === 0) {
         return i.reply({
           content: `No card with the name "${name}" found in the inventory.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -91,7 +92,7 @@ export default newSlashCommand({
     } catch (err) {
       console.error(err);
       return i.reply({
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
         content: "An error has occurred when discarding this card.",
       });
     }

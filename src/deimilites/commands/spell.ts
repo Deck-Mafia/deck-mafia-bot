@@ -1,5 +1,6 @@
 import { DeiMilitesGame } from '@prisma/client';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder, ChannelType, ChatInputCommandInteraction, CommandInteraction, EmbedBuilder, ModalBuilder, SlashCommandBuilder, TextChannel, TextInputBuilder, TextInputStyle, User } from 'discord.js';
+import { MessageFlags } from "discord.js";
 import { prisma } from '../..';
 import { newDeiMilitesCommand, newSlashCommand } from '../../structures/SlashCommand';
 import { fetchGame } from '../../util/deiActions';
@@ -43,7 +44,7 @@ export default newDeiMilitesCommand({
 						const name = i.options.getString('name', true);
 						const { embed, hostrow } = await viewSpellAsHost(game, name);
 						if (embed && hostrow) return await i.reply({ embeds: [embed] });
-						else return await i.reply({ content: 'An unexpected error has occured, does a spell with the same name exist?', ephemeral: true });
+						else return await i.reply({ content: 'An unexpected error has occured, does a spell with the same name exist?', flags: MessageFlags.Ephemeral });
 					case 'create':
 						const modal = new ModalBuilder();
 						modal.setCustomId(`new-spell_${game.id}`);
@@ -105,7 +106,7 @@ async function triggerListSpells(i: ChatInputCommandInteraction, game: DeiMilite
 async function triggerEditSpell(i: ChatInputCommandInteraction, game: DeiMilitesGame) {
 	const spellName = i.options.getString('name', true);
 	const { spell } = await viewSpellAsHost(game, spellName);
-	if (!spell) return i.reply({ content: 'Spell cannot be found', ephemeral: true });
+	if (!spell) return i.reply({ content: 'Spell cannot be found', flags: MessageFlags.Ephemeral });
 
 	const modal = new ModalBuilder();
 	modal.setCustomId(`edit-spell_${spell.id}`);

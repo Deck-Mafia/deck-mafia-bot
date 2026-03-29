@@ -1,4 +1,5 @@
 import { ChatInputCommandInteraction, CommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { MessageFlags } from "discord.js";
 import { prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 
@@ -32,7 +33,7 @@ export default newSlashCommand({
 			await i.reply(`New Card: \`${result.name}\`\n${result.uri}`);
 		} catch (err) {
 			await i.reply({
-				ephemeral: true,
+				flags: MessageFlags.Ephemeral,
 				content: 'An unexpected error when adding a card has occurred',
 			});
 		}

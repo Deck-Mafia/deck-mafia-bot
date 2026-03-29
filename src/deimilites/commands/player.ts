@@ -1,5 +1,6 @@
 import { DeiMilitesGame, OwnedElement } from '@prisma/client';
 import { ChatInputCommandInteraction, EmbedBuilder, SlashCommandBuilder, TextChannel } from 'discord.js';
+import { MessageFlags } from "discord.js";
 import { prisma } from '../..';
 import { newDeiMilitesCommand } from '../../structures/SlashCommand';
 import { fetchGame, updateElements } from '../../util/deiActions';
@@ -276,6 +277,6 @@ async function inventory(i: ChatInputCommandInteraction, game: DeiMilitesGame) {
 		await i.reply({ embeds: [embed] });
 	} catch (err) {
 		console.log(err);
-		await i.reply({ content: 'An error has occurred', ephemeral: true });
+		await i.reply({ content: 'An error has occurred', flags: MessageFlags.Ephemeral });
 	}
 }

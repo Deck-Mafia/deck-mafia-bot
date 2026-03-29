@@ -3,6 +3,7 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
 } from "discord.js";
+import { MessageFlags } from "discord.js";
 import { prisma } from "../..";
 import { newSlashCommand } from "../../structures/SlashCommand";
 
@@ -27,14 +28,14 @@ export default newSlashCommand({
     if (!member?.permissions.has(PermissionFlagsBits.Administrator)) {
       return i.reply({
         content: "You must be an administrator to update the card.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     if (!isValidUrl(newLink)) {
       return i.reply({
         content: "Please provide a valid URL for the new link.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -46,7 +47,7 @@ export default newSlashCommand({
       if (!fetchedCard) {
         return i.reply({
           content: `No card was found with the name "${cardName}".`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       } else {
         await prisma.card.update({
@@ -61,14 +62,14 @@ export default newSlashCommand({
         return i.reply({
           //@ts-ignore
           content: `You successfully updated the link of the card "${cardName}".\nNew link: ${updatedCard.uri}`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
     } catch (err) {
       console.error(err);
       return i.reply({
         content: "An unexpected error has occurred when updating the card.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },

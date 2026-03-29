@@ -42,7 +42,7 @@ export async function checkOnClose({ guild, voteCount }: OnTickProps): Promise<u
 				if (channel.isTextBased()) channel.send('Failed to lock channel. Do not post');
 			}
 
-			const vc = await calculateVoteCount(id);
+			const vc = await calculateVoteCount(id, guild);
 			if (vc) {
 				const embed = await createVoteCountPost(vc, guild);
 				if (channel.isTextBased()) channel.send({ content: 'Day has ended', embeds: [embed] });
@@ -54,35 +54,36 @@ export async function checkOnClose({ guild, voteCount }: OnTickProps): Promise<u
 }
 
 export async function checkForRegularVoteCount({ guild, voteCount }: OnTickProps): Promise<unknown> {
-	const { guildId, channelId, closeAt, id, lastPeriod } = voteCount;
-	await guild.channels.fetch();
-	const channel = guild.channels.cache.get(channelId);
-	if (!channel) return; // Probably close VC if this is the case.
+    const { channelId, id, lastPeriod } = voteCount;
+    
+    // If no lastPeriod is set, let's initialize one now so it starts working
+    if (!lastPeriod) {
+        await database.voteCount.update({
+            where: { id },
+            data: { lastPeriod: new Date(Date.now() + 1000 * 60 * 60 * 2) }
+        });
+        return;
+    }
 
-	if (!lastPeriod) return;
-	const currentTimeMillis = Math.ceil(Date.now());
-	const expectedTimeMillis = lastPeriod.getTime();
-	if (currentTimeMillis > expectedTimeMillis) {
-		await database.voteCount.update({
-			where: {
-				id,
-			},
-			data: {
-				lastPeriod: new Date(currentTimeMillis + 1000 * 60 * 60 * 2),
-			},
-		});
+    const currentTimeMillis = Date.now();
+    if (currentTimeMillis > lastPeriod.getTime()) {
+        try {
+            const channel = await guild.channels.fetch(channelId);
+            if (!channel || !channel.isTextBased()) return;
 
-		try {
-			if (!channel.isTextBased()) throw Error();
-			else {
-				const vc = await calculateVoteCount(id);
-				if (vc) {
-					const embed = await createVoteCountPost(vc, guild);
-					channel.send({ embeds: [embed] });
-				}
-			}
-		} catch (err) {}
-	}
-
-	return;
+            const vc = await calculateVoteCount(id, guild);
+            if (vc) {
+                const embed = await createVoteCountPost(vc, guild);
+                await (channel as TextChannel).send({ embeds: [embed] });
+                
+                // ONLY update the timer if the message actually sent successfully
+                await database.voteCount.update({
+                    where: { id },
+                    data: { lastPeriod: new Date(currentTimeMillis + 1000 * 60 * 60 * 2) },
+                });
+            }
+        } catch (err) {
+            console.error('[RegularVoteCount ERROR]', err);
+        }
+    }
 }

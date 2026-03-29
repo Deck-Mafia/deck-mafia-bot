@@ -8,6 +8,7 @@ import {
   ChannelType,
   PermissionFlagsBits,
 } from "discord.js";
+import { MessageFlags } from "discord.js";
 import { prisma } from "../..";
 import { newSlashCommand } from "../../structures/SlashCommand";
 import card from "./card";
@@ -56,7 +57,7 @@ export default newSlashCommand({
 
           if (!tradeSetup) {
             return i.reply({
-              ephemeral: true,
+              flags: MessageFlags.Ephemeral,
               content:
                 "Trade setup is not configured for this server. Contact an admin.",
             });
@@ -87,13 +88,13 @@ export default newSlashCommand({
 
           if (existingRequest) {
             return i.reply({
-              ephemeral: true,
+              flags: MessageFlags.Ephemeral,
               content:
                 "A trade request for one or more of these cards already exists.",
             });
           }
 
-          await i.deferReply({ ephemeral: true });
+          await i.deferReply({ flags: MessageFlags.Ephemeral });
 
           const tradeRequest = await prisma.tradeRequest.create({
             data: {
@@ -147,7 +148,7 @@ export default newSlashCommand({
           await i.editReply({
             content: "Trade request created successfully!",
             //@ts-ignore
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         } catch (err) {
           console.error(err);
@@ -164,7 +165,7 @@ export default newSlashCommand({
           if (!member?.permissions.has(PermissionFlagsBits.Administrator)) {
             return i.reply({
               content: "You must be an administrator to use this command.",
-              ephemeral: true,
+              flags: MessageFlags.Ephemeral,
             });
           }
 
@@ -192,7 +193,7 @@ export default newSlashCommand({
 
           await i.reply({
             content: "Trade setup configured successfully!",
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         } catch (err) {
           console.error(err);

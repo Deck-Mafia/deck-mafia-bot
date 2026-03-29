@@ -1,4 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChatInputCommandInteraction, CommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { MessageFlags } from "discord.js";
 import { prisma } from '../..';
 import { newSlashCommand } from '../../structures/SlashCommand';
 import stringSimilarity from 'string-similarity';
@@ -163,7 +164,7 @@ export default newSlashCommand({
 
       if (raced === 'timeout') {
         // exact checks are still running -> defer now to acknowledge interaction
-        await i.deferReply({ ephemeral: true });
+        await i.deferReply({ flags: MessageFlags.Ephemeral });
         deferred = true;
         // await remaining exact results
         [fetchedPublic, fetchedPrivateExact] = await exactPromise;
@@ -194,7 +195,7 @@ export default newSlashCommand({
       // NOTHING exact matched: Always defer/acknowledge before doing heavier fuzzy work.
       // This guarantees we never reply and then later defer (which is invalid).
       if (!deferred) {
-        await i.deferReply({ ephemeral: true });
+        await i.deferReply({ flags: MessageFlags.Ephemeral });
         deferred = true;
       }
       // after deferral, optionally simulate an error (for testing post-defer error handling)

@@ -1,14 +1,19 @@
 {
-	"compilerOptions": {
-		"target": "ES6",
-		"module": "commonjs",
-		"lib": ["es6"],
-		"allowJs": true,
-		"outDir": "build",
-		"rootDir": "./src",
-		"strict": true,
-		"noImplicitAny": true,
-		"esModuleInterop": true,
-		"resolveJsonModule": true
-	}
+    "compilerOptions": {
+        "target": "ES6",
+        "module": "commonjs",
+        "lib": ["es6"],
+        "allowJs": true,
+        "outDir": "build",
+        "rootDir": "./src",
+        "strict": true,
+        "noImplicitAny": true,
+        "esModuleInterop": true,
+        "resolveJsonModule": true
+    },
+    "exclude": [
+        "node_modules",
+        "build",
+        "backups"
+    ]
 }

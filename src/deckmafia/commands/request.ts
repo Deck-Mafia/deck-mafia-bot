@@ -1,4 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, StringSelectMenuBuilder, ChatInputCommandInteraction, SlashCommandBuilder, ButtonStyle } from 'discord.js';
+import { MessageFlags } from "discord.js";
 import { prisma } from '../..';
 import { newSlashCommand } from '../../structures/SlashCommand';
 
@@ -53,7 +54,7 @@ export default newSlashCommand({
 
                 const content = `\`Page ${page + 1} of ${totalPages}\``;
 
-                const reply = await i.reply({ content, components: [selectMenuRow.toJSON(), buttonRow.toJSON()], ephemeral: true });
+                const reply = await i.reply({ content, components: [selectMenuRow.toJSON(), buttonRow.toJSON()], flags: MessageFlags.Ephemeral });
                 return reply;
             };
 
@@ -110,7 +111,7 @@ export default newSlashCommand({
             });
         } catch (err) {
             await i.reply({
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
                 content: 'An unexpected error has occurred while running this command. Please contact tech support.',
             });
             console.error(err);

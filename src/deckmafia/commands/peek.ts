@@ -6,6 +6,7 @@ import {
   ButtonStyle,
   PermissionFlagsBits,
 } from "discord.js";
+import { MessageFlags } from "discord.js";
 import { prisma } from "../..";
 import { newSlashCommand } from "../../structures/SlashCommand";
 
@@ -32,7 +33,7 @@ export default newSlashCommand({
       if (!member?.permissions.has(PermissionFlagsBits.Administrator)) {
         return i.reply({
           content: "You must be an administrator to view others inventory.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -206,7 +207,7 @@ export default newSlashCommand({
         });
       } catch (err) {
         await i.reply({
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
           content:
             "An unexpected error has occurred while running this command. Please contact tech support. (Error Code: 2)",
         });
@@ -383,7 +384,7 @@ export default newSlashCommand({
         });
       } catch (err) {
         await i.reply({
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
           content:
             "An unexpected error has occurred while running this command. Please contact tech support. (Error Code: 3)",
         });

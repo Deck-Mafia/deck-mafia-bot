@@ -1,4 +1,5 @@
 import { ChatInputCommandInteraction, CommandInteraction, SlashCommandBuilder, User } from 'discord.js';
+import { MessageFlags } from "discord.js";
 import { prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 import string from 'string-similarity';
@@ -51,9 +52,9 @@ async function fetchCardData(i: CommandInteraction, cardName: string, user: User
 		const allCardNames = await getAllCardNames();
 		if (allCardNames.length > 0) {
 			const closestCardName = await getClosestCardName(cardName, allCardNames);
-			await i.followUp({ content: `No card was found with that name. Did you mean \`${closestCardName.bestMatch.target}\`?`, ephemeral: true });
+			await i.followUp({ content: `No card was found with that name. Did you mean \`${closestCardName.bestMatch.target}\`?`, flags: MessageFlags.Ephemeral });
 		} else {
-			await i.followUp({ content: `No card was found with that name.`, ephemeral: true });
+			await i.followUp({ content: `No card was found with that name.`, flags: MessageFlags.Ephemeral });
 		}
 	} else {
 		const newCard = await prisma.ownedCard.create({
@@ -104,7 +105,7 @@ export default newSlashCommand({
 			}
 		} catch (err) {
 			await i.reply({
-				ephemeral: true,
+				flags: MessageFlags.Ephemeral,
 				content: 'An unexpected error has occurred when saving this/these card/s',
 			});
 			console.error(err);

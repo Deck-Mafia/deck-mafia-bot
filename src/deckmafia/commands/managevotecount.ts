@@ -1,9 +1,11 @@
 import { ActionEvent } from '@prisma/client';
 import { time } from 'console';
 import { ChannelType, ChatInputCommandInteraction, CommandInteraction, EmbedBuilder, SlashCommandBuilder, TextChannel } from 'discord.js';
+import { MessageFlags } from "discord.js";
 import { database, prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
-import { checkGameInCategory, checkVoteCountInChannel, createGame, createNewEvent, createPlayer } from '../util/voteCount';
+import { checkGameInCategory, checkVoteCountInChannel, createGame, createNewEvent, createPlayer, calculateVoteCount, createVoteCountPost } from '../util/voteCount';
+
 
 const c = new SlashCommandBuilder();
 c.setName('managevotecount').setDescription('Manage a vote-counter');
@@ -34,11 +36,23 @@ c.addSubcommand((x) =>
 );
 
 c.addSubcommand((x) =>
-	x
-		.setName('manage')
-		.setDescription('Manage a vote-count within this channel.')
-		.addBooleanOption((x) => x.setName('pause').setDescription('Do you wish to pause the vote-counts auto posting').setRequired(true))
+    x
+        .setName('manage')
+        .setDescription('Manage a vote-count within this channel.')
+        .addBooleanOption((x) => x.setName('pause').setDescription('Do you wish to pause the vote-counts auto posting').setRequired(true))
+        .addBooleanOption((x) => x.setName('post').setDescription('Post the vote count immediately and reset the timer?').setRequired(false))
 );
+
+c.addSubcommand((x) =>
+    x.setName('list').setDescription('List all active vote counts across the server')
+);
+
+c.addSubcommand((x) =>
+    x.setName('close')
+        .setDescription('Deactivate a specific vote count by ID')
+        .addStringOption(x => x.setName('id').setDescription('The ID from the /list command').setRequired(true))
+);
+
 
 export default newSlashCommand({
 	data: c,
@@ -51,6 +65,11 @@ export default newSlashCommand({
 				return createEvent(i);
 			case 'manage':
 				return manageVoteCount(i);
+			case 'list':
+                return listActiveGames(i); 
+            case 'close':
+                const id = i.options.getString('id', true);
+                return closeGame(i, id);   
 			default:
 				return;
 		}
@@ -58,33 +77,56 @@ export default newSlashCommand({
 });
 
 async function manageVoteCount(i: ChatInputCommandInteraction) {
-	if (!i.guild) return;
-	await i.deferReply({ ephemeral: true });
+    if (!i.guild) return;
+    await i.deferReply({ flags: MessageFlags.Ephemeral });
 
-	const pause = i.options.getBoolean('pause', true);
-	const voteCounter = await checkVoteCountInChannel(i.channelId);
-	if (!voteCounter) return i.editReply('Vote Counter does not exist in this channel');
+    const pause = i.options.getBoolean('pause', true);
+    const shouldPost = i.options.getBoolean('post', false) ?? false;
+    
+    const voteCounter = await checkVoteCountInChannel(i.channelId);
+    if (!voteCounter) return i.editReply('Vote Counter does not exist in this channel');
 
-	try {
-		const edit = await database.voteCount.update({
-			where: {
-				id: voteCounter.id,
-			},
-			data: {
-				active: !pause,
-			},
-		});
+    try {
+        // 1. Update the Pause/Active status
+        await database.voteCount.update({
+            where: { id: voteCounter.id },
+            data: { active: !pause },
+        });
 
-		await i.editReply('Successful manage');
-	} catch (err) {
-		console.log(err);
-		return i.editReply('An error has occurred. Error handling not yet implemented');
-	}
+        let responseMessage = pause ? 'Vote counter paused.' : 'Vote counter unpaused.';
+
+        // 2. Handle the "Post Now" logic if requested
+        if (shouldPost) {
+            const channel = i.channel as TextChannel;
+            const data = await calculateVoteCount(voteCounter.id, i.guild);
+            
+            if (data && channel && typeof channel.send === 'function') {
+                const embed = await createVoteCountPost(data, i.guild);
+                await channel.send({ embeds: [embed] });
+
+                // Reset the timer since we just posted
+                await database.voteCount.update({
+                    where: { id: voteCounter.id },
+                    data: { lastPeriod: new Date() },
+                });
+                
+                responseMessage += ' Vote count posted and timer reset.';
+            } else {
+                responseMessage += ' Failed to post vote count (check permissions).';
+            }
+        }
+
+        await i.editReply(responseMessage);
+
+    } catch (err) {
+        console.error(err);
+        return i.editReply('An error has occurred during management.');
+    }
 }
 
 async function createEvent(i: ChatInputCommandInteraction) {
 	if (!i.guild) return;
-	await i.deferReply({ ephemeral: true });
+	await i.deferReply({ flags: MessageFlags.Ephemeral });
 
 	const player = i.options.getUser('player', true);
 	const timestamp = i.options.getInteger('timestamp', false) ?? undefined;
@@ -120,7 +162,7 @@ async function createEvent(i: ChatInputCommandInteraction) {
 
 async function createVoteCount(i: ChatInputCommandInteraction) {
 	if (!i.guild) return;
-	await i.deferReply({ ephemeral: true });
+	await i.deferReply({ flags: MessageFlags.Ephemeral });
 
 	const channel = i.channel as TextChannel;
 	const role = i.options.getRole('alive', true);
@@ -146,6 +188,7 @@ async function createVoteCount(i: ChatInputCommandInteraction) {
 				majority,
 				plurality,
 				closeAt,
+				lastPeriod: new Date(Date.now() + 1000 * 60 * 60 * 2),
 			},
 		});
 
@@ -158,3 +201,52 @@ async function createVoteCount(i: ChatInputCommandInteraction) {
 		return i.editReply('An error has occurred. Error handling not yet implemented');
 	}
 }
+
+async function listActiveGames(i: CommandInteraction) {
+    const activeGames = await database.voteCount.findMany({
+        where: { 
+            active: true,
+            guildId: i.guildId! 
+        }
+    });
+
+    if (activeGames.length === 0) {
+        return i.reply({ content: "There are no active vote counts.", flags: [MessageFlags.Ephemeral] });
+    }
+
+    const embed = new EmbedBuilder()
+        .setTitle("Active Vote Counts")
+        .setColor(0x00FF00);
+
+    const list = activeGames.map(vg => {
+        return `**ID:** \`${vg.id}\` | **Channel:** <#${vg.channelId}>\n*Created:* <t:${Math.floor(vg.createdAt.getTime() / 1000)}:R>`;
+    }).join('\n\n');
+
+    embed.setDescription(list || "No games found.");
+    await i.reply({ embeds: [embed], flags: [MessageFlags.Ephemeral] });
+}
+async function closeGame(i: CommandInteraction, voteCountId: string) {
+    try {
+        // 1. Delete all ActionEvents first (to avoid the relation error)
+        await database.actionEvent.deleteMany({
+            where: { voteCountId: voteCountId }
+        });
+
+        // 2. Now delete the VoteCount record itself
+        await database.voteCount.delete({
+            where: { id: voteCountId }
+        });
+
+        await i.reply({ 
+            content: `Successfully DELETED vote count \`${voteCountId}\` and all its history. You can now create a new one.`, 
+            flags: [MessageFlags.Ephemeral] 
+        });
+    } catch (err) {
+        console.error(err);
+        await i.reply({ 
+            content: "Could not find a vote count with that ID or a database error occurred.", 
+            flags: [MessageFlags.Ephemeral] 
+        });
+    }
+}
+

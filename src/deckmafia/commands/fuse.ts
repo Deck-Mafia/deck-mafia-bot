@@ -7,6 +7,7 @@ import {
   SlashCommandBuilder,
   TextChannel,
 } from "discord.js";
+import { MessageFlags } from "discord.js";
 import { database, prisma } from "../..";
 import { newSlashCommand, SlashCommand } from "../../structures/SlashCommand";
 
@@ -99,7 +100,7 @@ async function handleRequest(i: ChatInputCommandInteraction) {
   if (existingQueueEntry.length > 0) {
     return i.reply({
       content: "You are already in the fuse queue. Please wait for your turn.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -126,7 +127,7 @@ async function handleRequest(i: ChatInputCommandInteraction) {
     return i.reply({
       content:
         "The fuse system has not been set up. Contact an administrator to set it up.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
   //@ts-ignore
@@ -138,7 +139,7 @@ async function handleRequest(i: ChatInputCommandInteraction) {
     return i.reply({
       content:
         "The specified notification channel does not exist. Contact an administrator to set it up.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -165,7 +166,7 @@ async function handleDone(i: ChatInputCommandInteraction) {
   if (!member?.permissions.has(PermissionFlagsBits.Administrator)) {
     return i.reply({
       content: "You must be an administrator to use this command.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -181,7 +182,7 @@ async function handleDone(i: ChatInputCommandInteraction) {
   if (!nextInQueue) {
     return i.reply({
       content: "There are no users in the fuse queue.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -223,7 +224,7 @@ async function handleDone(i: ChatInputCommandInteraction) {
     return i.reply({
       content:
         "The fuse system has not been set up. Contact an administrator to set it up.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -235,7 +236,7 @@ async function handleDone(i: ChatInputCommandInteraction) {
     return i.reply({
       content:
         "The specified status channel does not exist. Contact an administrator to set it up.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -271,7 +272,7 @@ async function handleSetup(i: ChatInputCommandInteraction) {
   if (!member?.permissions.has(PermissionFlagsBits.Administrator)) {
     return i.reply({
       content: "You must be an administrator to use this command.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -285,7 +286,7 @@ async function handleSetup(i: ChatInputCommandInteraction) {
   if (existingFuseSystem) {
     return i.reply({
       content: "The fuse system is already set up for this guild.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -303,6 +304,6 @@ async function handleSetup(i: ChatInputCommandInteraction) {
 
   return i.reply({
     content: `The fuse system has been set up. Fuse requests will be posted in ${channel.toString()}.`,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }

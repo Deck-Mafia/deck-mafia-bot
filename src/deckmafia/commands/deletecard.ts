@@ -1,4 +1,5 @@
 import { ChatInputCommandInteraction, CommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { MessageFlags } from "discord.js";
 import { prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 
@@ -30,7 +31,7 @@ export default newSlashCommand({
 			await i.reply({ content: `\`${name}\` has been deleted. If this was a mistake, run the \`add\` command again to add it back` });
 		} catch (err) {
 			await i.reply({
-				ephemeral: true,
+				flags: MessageFlags.Ephemeral,
 				content: 'An error has occurred when deleting this card.',
 			});
 		}

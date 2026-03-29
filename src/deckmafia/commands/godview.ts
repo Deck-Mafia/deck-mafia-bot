@@ -1,4 +1,5 @@
 import { ChatInputCommandInteraction, CommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { MessageFlags } from "discord.js";
 import { prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 import string from 'string-similarity';
@@ -65,16 +66,16 @@ export default newSlashCommand({
 				if (allCards.length > 0) {
 					const closestCardName = await getClosestCardName(cardName, allCards);
 					let message = `No card was found with that name, did you mean \`${closestCardName.bestMatch.target}\`?`;
-					return await i.reply({ content: message, ephemeral: true });
+					return await i.reply({ content: message, flags: MessageFlags.Ephemeral });
 				} else {
-					return await i.reply({ content: `No card was found with that name.`, ephemeral: true });
+					return await i.reply({ content: `No card was found with that name.`, flags: MessageFlags.Ephemeral });
 				}
 			} else {
 				return sendCard(i, fetchedCard, ephemeral);
 			}
 		} catch (err) {
 			await i.reply({
-				ephemeral: true,
+				flags: MessageFlags.Ephemeral,
 				content: 'An unexpected error has occurred when fetching this card',
 			});
 			console.error(err);

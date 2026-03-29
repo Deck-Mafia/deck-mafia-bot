@@ -88,13 +88,19 @@ export async function getCommandID(guild: Guild, commandName: string) {
   return command?.id || null;
 }
 
+//export async function getAllWithRole(guild: Guild, roleID: string) {
+//  const members = await guild.members.fetch(); 
+//  return Array.from(members.filter((m) => m.roles.cache.has(roleID)).values());
+//}
 export async function getAllWithRole(guild: Guild, roleID: string) {
-  const result: GuildMember[] = [];
-  await guild.members.fetch();
-  const users = guild.members.cache.filter((m) => m.roles.cache.get(roleID));
-  users.forEach((v) => result.push(v));
-  return result;
+  // This asks Discord: "Give me only the members who have this specific role"
+  // Much lighter on the Pi and the API
+  const role = await guild.roles.fetch(roleID, { force: true });
+  if (!role) return [];
+  return Array.from(role.members.values());
 }
+
+
 
 async function getAllEvents(voteCountId: string): Promise<ActionEvent[]> {
   const votes = await database.actionEvent.findMany({
@@ -129,18 +135,30 @@ type VoteCountResponse = {
   playerStats: Record<DiscordID, Event>;
   voteCounter: VoteCount;
 };
-export async function calculateVoteCount(
-  voteCountId: string
+
+/* export async function calculateVoteCount(
+  voteCountId: string,
+  guild: Guild
 ): Promise<VoteCountResponse | null> {
   const wagons: Record<DiscordID, DiscordID[]> = {};
   const currentStats: Record<DiscordID, Event> = {};
-
   const voteCounter = await database.voteCount.findUnique({
     where: { id: voteCountId },
   });
-  const allEvents = await getAllEvents(voteCountId);
   if (!voteCounter) return null;
+  
+  //const guild = await client.guilds.fetch(voteCounter.guildId);
+  
 
+  const aliveMembers = await guild.members.fetch();
+  const membersWithRole = aliveMembers.filter(m => m.roles.cache.has(voteCounter.livingRoleId));
+
+  membersWithRole.forEach(member => {
+    currentStats[member.id] = createDefaultEvent(member.id);
+    if (!wagons[member.id]) wagons[member.id] = [];
+  });
+  
+  const allEvents = await getAllEvents(voteCountId);
   for (let index = 0; index < allEvents.length; index++) {
     const focusEvent = allEvents[index];
     if (!wagons[focusEvent.playerId]) wagons[focusEvent.playerId] = [];
@@ -163,6 +181,7 @@ export async function calculateVoteCount(
       if (focusEvent.isUnvoting) {
         mutable.isVotingFor = null;
       }
+	
     }
 
     for (const wagonKey in wagons) {
@@ -213,13 +232,125 @@ export async function calculateVoteCount(
   }
   return { wagons, playerStats: currentStats, voteCounter };
 }
+ */
+ 
+ export async function calculateVoteCount(
+  voteCountId: string,
+  guild: Guild
+): Promise<VoteCountResponse | null> {
+  const wagons: Record<DiscordID, DiscordID[]> = {};
+  const currentStats: Record<DiscordID, Event> = {};
+  
+  const voteCounter = await database.voteCount.findUnique({
+    where: { id: voteCountId },
+  });
+  if (!voteCounter) return null;
 
+  // 1. Get events first to see who has historical actions
+  const allEvents = await getAllEvents(voteCountId);
+  
+  // 2. TARGETED FETCH: Only fetch players who have actually done something.
+  // This prevents the "Opcode 8" crash by not asking for the whole server.
+  const relevantUserIds = new Set(allEvents.map(e => e.playerId));
+  if (relevantUserIds.size > 0) {
+    await guild.members.fetch({ user: Array.from(relevantUserIds) }).catch(() => null);
+  }
+
+  // 3. Initialize "Alive" players from CACHE.
+  // We use the local cache instead of another .fetch() to save the Pi's resources.
+  const aliveMembers = await getAllWithRole(guild, voteCounter.livingRoleId);
+
+  aliveMembers.forEach(member => {
+    currentStats[member.id] = createDefaultEvent(member.id);
+    if (!wagons[member.id]) wagons[member.id] = [];
+  });
+  
+  // 4. Process the events
+  for (let index = 0; index < allEvents.length; index++) {
+    const focusEvent = allEvents[index];
+    
+    // Ensure the player exists in stats (for players who might have lost the role but have events)
+    if (!currentStats[focusEvent.playerId]) {
+      currentStats[focusEvent.playerId] = createDefaultEvent(focusEvent.playerId);
+    }
+    if (!wagons[focusEvent.playerId]) wagons[focusEvent.playerId] = [];
+
+    const mutable = currentStats[focusEvent.playerId];
+    mutable.canBeVoted = focusEvent.canBeVoted ?? mutable.canBeVoted;
+    mutable.canVote = focusEvent.canVote ?? mutable.canVote;
+    mutable.countsForMajority = focusEvent.countsForMajority ?? mutable.countsForMajority;
+    mutable.voteWeight = focusEvent.voteWeight ?? mutable.voteWeight;
+
+    if (voteCounter.lockedVotes) {
+      mutable.isVotingFor = mutable.isVotingFor ?? focusEvent.isVotingFor;
+    } else {
+      mutable.isVotingFor = focusEvent.isVotingFor ?? mutable.isVotingFor;
+      if (focusEvent.isUnvoting) {
+        mutable.isVotingFor = null;
+      }
+      // REMOVED the "return" that was accidentally here previously
+    }
+
+    // Update wagons logic
+    for (const wagonKey in wagons) {
+      const wagon = wagons[wagonKey];
+      const targetStats = currentStats[wagonKey];
+      if (!targetStats) continue;
+
+      const canBeVoted = targetStats.canBeVoted;
+      const canVote = mutable.canVote;
+
+      if (!mutable.isVotingFor || !(canBeVoted && canVote)) {
+        if (wagon.includes(focusEvent.playerId))
+          wagons[wagonKey] = wagon.filter((v) => v != focusEvent.playerId);
+        if (!canBeVoted) delete wagons[wagonKey];
+      } else {
+        if (wagonKey === mutable.isVotingFor) {
+          if (!wagon.includes(focusEvent.playerId))
+            wagons[wagonKey] = [...wagon, focusEvent.playerId];
+        } else {
+          wagons[wagonKey] = wagon.filter((v) => v != focusEvent.playerId);
+        }
+      }
+    }
+
+    // Majority check logic...
+    if (voteCounter.majority) {
+      let playerCount = 0;
+      for (const statKey in currentStats) {
+        if (currentStats[statKey].countsForMajority) playerCount += 1;
+      }
+
+      const majority = Math.floor(playerCount / 2 + 1);
+      let majorityReached = false;
+      for (const wagonKey in wagons) {
+        let totalWeight = 0;
+        for (const voter of wagons[wagonKey]) {
+          totalWeight += currentStats[voter]?.voteWeight ?? 1;
+        }
+        if (totalWeight >= majority) majorityReached = true;
+      }
+
+      if (majorityReached) return { wagons, playerStats: currentStats, voteCounter };
+    }
+  }
+  
+  return { wagons, playerStats: currentStats, voteCounter };
+}
 export async function createVoteCountPost(
   voteCount: VoteCountResponse,
   guild: Guild
 ) {
   const { wagons, playerStats, voteCounter } = voteCount;
-  await guild.members.fetch();
+  
+  // 1. Collect all unique IDs that need a name (voters + targets)
+  const userIdsToFetch = new Set([...Object.keys(wagons), ...Object.values(wagons).flat()]);
+
+  // 2. Fetch only those specific members
+  if (userIdsToFetch.size > 0) {
+    await guild.members.fetch({ user: Array.from(userIdsToFetch) });
+  }
+  //await guild.members.fetch();
   let playerCount = 0;
 
   const embed = new EmbedBuilder();
@@ -239,7 +370,7 @@ export async function createVoteCountPost(
 
   const aliveRoleId = voteCounter.livingRoleId;
 
-  const aliveRole = guild.roles.cache.get(aliveRoleId);
+  const aliveRole = await guild.roles.fetch(aliveRoleId);
 
   const nonVotingPlayers: string[] = [];
 /*  const allPlayers = Array.from(guild.members.cache.keys());

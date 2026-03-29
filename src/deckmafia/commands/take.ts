@@ -1,4 +1,5 @@
 import { ChatInputCommandInteraction, CommandInteraction, SlashCommandBuilder, User } from 'discord.js';
+import { MessageFlags } from "discord.js";
 import { prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 import string from 'string-similarity';
@@ -53,9 +54,9 @@ async function removeCard(i: ChatInputCommandInteraction, cardName: string, user
 		const allCardNames = await getAllCardNames();
 		if (allCardNames.length > 0) {
 			const closestCardName = await getClosestCardName(cardName, allCardNames);
-			await i.followUp({ content: `No public card was found with that name. Did you mean \`${closestCardName.bestMatch.target}\`?\nIf the card you want is private, please use \`/privatecard\``, ephemeral: true });
+			await i.followUp({ content: `No public card was found with that name. Did you mean \`${closestCardName.bestMatch.target}\`?\nIf the card you want is private, please use \`/privatecard\``, flags: MessageFlags.Ephemeral });
 		} else {
-			await i.followUp({ content: `No public card was found with that name.`, ephemeral: true });
+			await i.followUp({ content: `No public card was found with that name.`, flags: MessageFlags.Ephemeral });
 		}
 	} else {
 		let inventory = await prisma.inventory.findUnique({ where: { discordId: user.id } });
@@ -69,7 +70,7 @@ async function removeCard(i: ChatInputCommandInteraction, cardName: string, user
 			},
 		});
 
-		if (!cardToDelete) return await i.followUp({ content: `User does not own this card.`, ephemeral: true });
+		if (!cardToDelete) return await i.followUp({ content: `User does not own this card.`, flags: MessageFlags.Ephemeral });
 
 		await prisma.ownedCard.delete({
 			where: {
@@ -104,7 +105,7 @@ export default newSlashCommand({
 			}
 		} catch (err) {
 			await i.reply({
-				ephemeral: true,
+				flags: MessageFlags.Ephemeral,
 				content: 'An unexpected error has occurred when fetching this card',
 			});
 			console.error(err);

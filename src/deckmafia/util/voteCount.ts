@@ -135,109 +135,8 @@ type VoteCountResponse = {
   playerStats: Record<DiscordID, Event>;
   voteCounter: VoteCount;
 };
-
-/* export async function calculateVoteCount(
-  voteCountId: string,
-  guild: Guild
-): Promise<VoteCountResponse | null> {
-  const wagons: Record<DiscordID, DiscordID[]> = {};
-  const currentStats: Record<DiscordID, Event> = {};
-  const voteCounter = await database.voteCount.findUnique({
-    where: { id: voteCountId },
-  });
-  if (!voteCounter) return null;
-  
-  //const guild = await client.guilds.fetch(voteCounter.guildId);
-  
-
-  const aliveMembers = await guild.members.fetch();
-  const membersWithRole = aliveMembers.filter(m => m.roles.cache.has(voteCounter.livingRoleId));
-
-  membersWithRole.forEach(member => {
-    currentStats[member.id] = createDefaultEvent(member.id);
-    if (!wagons[member.id]) wagons[member.id] = [];
-  });
-  
-  const allEvents = await getAllEvents(voteCountId);
-  for (let index = 0; index < allEvents.length; index++) {
-    const focusEvent = allEvents[index];
-    if (!wagons[focusEvent.playerId]) wagons[focusEvent.playerId] = [];
-    if (!currentStats[focusEvent.playerId])
-      currentStats[focusEvent.playerId] = createDefaultEvent(
-        focusEvent.playerId
-      );
-
-    const mutable = currentStats[focusEvent.playerId];
-    mutable.canBeVoted = focusEvent.canBeVoted ?? mutable.canBeVoted;
-    mutable.canVote = focusEvent.canVote ?? mutable.canVote;
-    mutable.countsForMajority =
-      focusEvent.countsForMajority ?? mutable.countsForMajority;
-    mutable.voteWeight = focusEvent.voteWeight ?? mutable.voteWeight;
-
-    if (voteCounter.lockedVotes) {
-      mutable.isVotingFor = mutable.isVotingFor ?? focusEvent.isVotingFor;
-    } else {
-      mutable.isVotingFor = focusEvent.isVotingFor ?? mutable.isVotingFor;
-      if (focusEvent.isUnvoting) {
-        mutable.isVotingFor = null;
-      }
-	
-    }
-
-    for (const wagonKey in wagons) {
-      const wagon = wagons[wagonKey];
-      const canBeVoted = currentStats[wagonKey].canBeVoted;
-      const canVote = currentStats[focusEvent.playerId].canVote;
-
-      if (!mutable.isVotingFor || !(canBeVoted && canVote)) {
-        if (wagons[wagonKey].includes(focusEvent.playerId))
-          wagons[wagonKey] = wagon.filter((v) => v != focusEvent.playerId);
-        if (!canBeVoted) delete wagons[wagonKey];
-      } else {
-        if (wagonKey === mutable.isVotingFor) {
-          if (!wagon.includes(focusEvent.playerId))
-            wagons[wagonKey] = [...wagon, focusEvent.playerId];
-        } else {
-          wagons[wagonKey] = wagon.filter((v) => v != focusEvent.playerId);
-        }
-      }
-    }
-
-    if (voteCounter.majority) {
-      let playerCount = 0;
-      for (const statKey in currentStats) {
-        const stat = currentStats[statKey];
-        if (stat.countsForMajority) playerCount += 1;
-      }
-
-      const majority = Math.floor(playerCount / 2 + 1);
-      let majorityReached: boolean = false;
-      for (const wagonKey in wagons) {
-        const wagon = wagons[wagonKey];
-        let totalVoteWeight = 0;
-        for (const voter of wagon) {
-          const stats = currentStats[voter];
-          if (stats) totalVoteWeight += stats.voteWeight ?? 1;
-        }
-        if (totalVoteWeight >= majority) majorityReached = true;
-      }
-
-      if (majorityReached)
-        return {
-          wagons,
-          playerStats: currentStats,
-          voteCounter,
-        };
-    }
-  }
-  return { wagons, playerStats: currentStats, voteCounter };
-}
- */
  
- export async function calculateVoteCount(
-  voteCountId: string,
-  guild: Guild
-): Promise<VoteCountResponse | null> {
+ export async function calculateVoteCount(  voteCountId: string,  guild: Guild	): Promise<VoteCountResponse | null> {
   const wagons: Record<DiscordID, DiscordID[]> = {};
   const currentStats: Record<DiscordID, Event> = {};
   
@@ -256,14 +155,19 @@ type VoteCountResponse = {
     await guild.members.fetch({ user: Array.from(relevantUserIds) }).catch(() => null);
   }
 
-  // 3. Initialize "Alive" players from CACHE.
-  // We use the local cache instead of another .fetch() to save the Pi's resources.
+  // 3. Initialize ONLY real, alive players
+  const allPlayerIds = new Set(allEvents.map(e => e.playerId));
   const aliveMembers = await getAllWithRole(guild, voteCounter.livingRoleId);
-
-  aliveMembers.forEach(member => {
-    currentStats[member.id] = createDefaultEvent(member.id);
-    if (!wagons[member.id]) wagons[member.id] = [];
-  });
+  
+  // Clear and rebuild to ensure we only have valid players
+  aliveMembers.forEach(member => {  allPlayerIds.add(member.id);  });
+  
+	allPlayerIds.forEach(id => {
+		if (id === '1061684614797742190') return; 
+		
+		currentStats[id] = createDefaultEvent(id);
+		wagons[id] = []; // Initialize as empty array
+	});
   
   // 4. Process the events
   for (let index = 0; index < allEvents.length; index++) {
@@ -280,6 +184,21 @@ type VoteCountResponse = {
     mutable.canVote = focusEvent.canVote ?? mutable.canVote;
     mutable.countsForMajority = focusEvent.countsForMajority ?? mutable.countsForMajority;
     mutable.voteWeight = focusEvent.voteWeight ?? mutable.voteWeight;
+	
+	
+	// Ensure dead players are properly marked (important fix)
+	for (const statKey in currentStats) {
+		const stat = currentStats[statKey];
+		if (stat.isVotingFor && !currentStats[stat.isVotingFor]) {
+			// This is a "Ghost" target (e.g., a dead player or someone without current role)
+			// Initialize them just so they exist for the validation check
+			currentStats[stat.isVotingFor] = createDefaultEvent(stat.isVotingFor);
+		}
+	}
+	
+    if (focusEvent.canBeVoted === false) {
+      mutable.canBeVoted = false;
+    }
 
     if (voteCounter.lockedVotes) {
       mutable.isVotingFor = mutable.isVotingFor ?? focusEvent.isVotingFor;
@@ -297,21 +216,22 @@ type VoteCountResponse = {
       const targetStats = currentStats[wagonKey];
       if (!targetStats) continue;
 
-      const canBeVoted = targetStats.canBeVoted;
+      const canBeVoted = targetStats.canBeVoted ?? true;
       const canVote = mutable.canVote;
 
-      if (!mutable.isVotingFor || !(canBeVoted && canVote)) {
-        if (wagon.includes(focusEvent.playerId))
-          wagons[wagonKey] = wagon.filter((v) => v != focusEvent.playerId);
-        if (!canBeVoted) delete wagons[wagonKey];
-      } else {
-        if (wagonKey === mutable.isVotingFor) {
-          if (!wagon.includes(focusEvent.playerId))
-            wagons[wagonKey] = [...wagon, focusEvent.playerId];
-        } else {
-          wagons[wagonKey] = wagon.filter((v) => v != focusEvent.playerId);
+      if (!mutable.isVotingFor || !canVote) {
+        wagons[wagonKey] = wagon.filter((v) => v !== focusEvent.playerId);
+      } else if (wagonKey === mutable.isVotingFor) {
+        if (!wagon.includes(focusEvent.playerId)) {
+          wagons[wagonKey] = [...wagon, focusEvent.playerId];
         }
+      } else {
+        wagons[wagonKey] = wagon.filter((v) => v !== focusEvent.playerId);
       }
+
+     
+	
+	  
     }
 
     // Majority check logic...
@@ -334,128 +254,164 @@ type VoteCountResponse = {
       if (majorityReached) return { wagons, playerStats: currentStats, voteCounter };
     }
   }
+  const finalWagons: Record<DiscordID, DiscordID[]> = {};
+  for (const key in wagons) {
+  	if (wagons[key].length > 0) {
+  		finalWagons[key] = wagons[key];
+  	}
+  }
   
-  return { wagons, playerStats: currentStats, voteCounter };
+  // Now return the cleaned-up wagons
+  return { wagons: finalWagons, playerStats: currentStats, voteCounter };
+  
 }
+
+
 export async function createVoteCountPost(
   voteCount: VoteCountResponse,
   guild: Guild
 ) {
   const { wagons, playerStats, voteCounter } = voteCount;
-  
-  // 1. Collect all unique IDs that need a name (voters + targets)
-  const userIdsToFetch = new Set([...Object.keys(wagons), ...Object.values(wagons).flat()]);
 
-  // 2. Fetch only those specific members
-  if (userIdsToFetch.size > 0) {
-    await guild.members.fetch({ user: Array.from(userIdsToFetch) });
-  }
-  //await guild.members.fetch();
+  // 1. Ensure IDs are an array of strings
+const userIdsToFetch = Array.from(new Set([
+    ...Object.keys(playerStats),
+    ...Object.values(playerStats)
+        .map(s => s.isVotingFor)
+        .filter((id): id is string => id !== null && id !== '1061684614797742190')
+]));
+
+// 2. Fetch using the correct signature
+if (userIdsToFetch.length > 0) {
+    // Simply pass the 'user' array to the fetch options
+    await guild.members.fetch({ user: userIdsToFetch }).catch(() => null);
+}
+
   let playerCount = 0;
-
   const embed = new EmbedBuilder();
   embed.setTitle("VoteCount");
-
   embed.setThumbnail(guild.iconURL());
   embed.setColor(0xf8f98e);
 
-  if (voteCount.voteCounter.majority) {
+  if (voteCounter.majority) {
     for (const statKey in playerStats) {
-      const stat = playerStats[statKey];
-      if (stat.countsForMajority) playerCount += 1;
+      if (playerStats[statKey].countsForMajority) playerCount += 1;
     }
   }
 
-  let totalString = "";
 
-  const aliveRoleId = voteCounter.livingRoleId;
 
-  const aliveRole = await guild.roles.fetch(aliveRoleId);
-
+  // ==================== NON-VOTING PLAYERS  ====================
   const nonVotingPlayers: string[] = [];
-/*  const allPlayers = Array.from(guild.members.cache.keys());
-  const voters = Object.keys(wagons);
-  const nonVoters = allPlayers.filter(
-    //@ts-ignore
-    (player) => !voters.includes(player) && aliveRole.members.has(player)
-  );
+  const livingRoleId = voteCounter.livingRoleId;
+  //console.log(`[DEBUG] Starting loop. PlayerStats keys: ${Object.keys(playerStats).join(', ')}`);
 
-
-  if (nonVoters.length > 0) {
-    nonVoters.forEach((nonVoter) => {
-      const nonVoterMember = guild.members.cache.get(nonVoter);
-      if (nonVoterMember) nonVotingPlayers.push(nonVoterMember.displayName);
-      else nonVotingPlayers.push(`<@${nonVoter}>`);
-    });
-*/
   for (const statKey in playerStats) {
     const stat = playerStats[statKey];
-    if (stat.isVotingFor === '1061684614797742190') nonVotingPlayers.push(`<@${stat.playerId}>`);
+    if (statKey === '1061684614797742190') continue;
+
+	const member = guild.members.cache.get(stat.playerId);
+	const name = member ? member.displayName : "Unknown";
+	const isAlive = !!stat && member?.roles.cache.has(livingRoleId);
+	const hasRole = member?.roles.cache.has(livingRoleId);
+    // Log EVERY player
+    //console.log(`[DEBUG] Processing: ${name} (${statKey}) | HasRole: ${hasRole}`);
+/* 	if (!hasRole) {
+        console.log(`[DEBUG] Skipping ${name} because HasRole is ${hasRole}`);
+        continue; 
+    } */
+    
+    const targetId = stat.isVotingFor;
+	const targetMember = targetId ? guild.members.cache.get(targetId) : null;
+    const targetStat = targetId ? playerStats[targetId] : null;
+    const isTargetAlive = targetMember?.roles.cache.has(livingRoleId) ?? false;
+	
+    const isActuallyVoting = targetId && 
+                             targetId !== '1061684614797742190' && 
+                             isTargetAlive;
+    
+	// DEBUG: Log why it thinks they are voting
+/*     if (isActuallyVoting) {
+        console.log(`[DEBUG] ${name} is marked as ACTUALLY VOTING for ${targetMember?.displayName ?? targetId} (isTargetAlive: ${isTargetAlive})`);
+    } */
+
+    if (!isActuallyVoting) {
+        const entry = `\`${name}\` <@${stat.playerId}>`; 
+        nonVotingPlayers.push(entry);
+        //console.log(`[DEBUG] Pushed to nonVoting: ${name} (Reason: ${!targetId || targetId === '1061684614797742190' ? 'No target' : 'Target dead'})`);
+    }
+    
   }
-  if (nonVotingPlayers.length > 0) {
-    totalString += `**Non-voting players:** *${nonVotingPlayers.join(
-      ", "
-    )}*\n\n`;
   
-  }
-
-  if (Object.keys(wagons).length === 0) {
-    totalString += "`No Votes`";
-  } else {
-    for (const wagonKey in wagons) {
-      const wagon = wagons[wagonKey];
-      const target = guild.members.cache.get(wagonKey);
-      const wagonTop = target?.displayName || `<@${wagonKey}>`;
-      const wagonNames: string[] = [];
-      let totalVoteWeight = 0;
-      for (const name of wagon) {
-        const stat = playerStats[name];
-        totalVoteWeight += stat?.voteWeight ?? 1;
-        const target = guild.members.cache.get(name);
-        if (!target) wagonNames.push(`<@${name}>`);
-        else wagonNames.push(target.displayName);
-      }
-
-      const wagonString =
-        `**${wagonTop} (${totalVoteWeight})** - ${wagonNames.join(
-          ", "
-        )}`.trim();
-
-      if (wagonString != "" && totalVoteWeight > 0)
-        totalString += `\n${wagonString}\n`;
+  // ==================== WAGON CALCULATION ====================
+  const wagonLines: string[] = [];
+  for (const wagonKey in wagons) {
+  const wagon = wagons[wagonKey];
+  //console.log(`[DEBUG] Found wagon on ${wagonKey} with ${wagon.length} voters:`, wagon);
+  const targetMember = guild.members.cache.get(wagonKey);
+  const wagonTop = targetMember?.displayName || `<@${wagonKey}>`;
+  
+  const voterNames = wagon.map(id => guild.members.cache.get(id)?.displayName || `<@${id}>`);
+  
+  if (wagon.length > 0) {
+  	wagonLines.push(`**${wagonTop} (${wagon.length})** - ${voterNames.join(", ")}`);
     }
   }
+  
 
-  console.log(voteCount.voteCounter.closeAt);
-
-  embed.addFields({
-    name: "Votes",
-    value: totalString,
+  // ==================== FINAL COMPOSITION ====================
+  let finalValue = "";
+  
+  if (nonVotingPlayers.length > 0) {
+  // 1. Create a clean list for the display names
+  // We use .map to extract just the name from your previous push logic
+  const displayNames = nonVotingPlayers.map(entry => {
+  	// This regex assumes your entry is formatted as `Name` <@ID>
+  	const match = entry.match(/`(.*?)`/);
+  	return match ? match[1] : "Unknown";
   });
+  
+  // 2. Create the spoilered mentions
+  // We map to the raw mention <@ID> and join them without commas
+  const spoileredMentions = nonVotingPlayers.map(entry => {
+  	const match = entry.match(/<@(\d+)>/);
+  	return match ? `<@${match[1]}>` : "";
+  });
+  
+  finalValue += `**Not Voting:**\n${displayNames.join(", ")}\n\n`;
+  finalValue += `-# ||Mentions: ${spoileredMentions.join(" ")}||`;
+  }
+  
+  if (wagonLines.length > 0) {
+  finalValue += `\n\n**Votes:**\n${wagonLines.join("\n")}`;
+  }
+  
+  // Ensure it's not empty
+  const valueToSet = finalValue.trim() || "`No Votes`";
+  //console.log(`[DEBUG] Final string length: ${valueToSet.length}`);
+  
+  // Use .addFields or .setFields (if you are editing an existing message)
+  embed.addFields({ name: "Votes", value: valueToSet });
+
 
   const additionalNotes: string[] = [];
-
   if (voteCounter.majority) {
     const majority = Math.floor(playerCount / 2 + 1);
     additionalNotes.push(`> ${playerCount} alive so ${majority} is Majority`);
   }
-
   if (voteCount.voteCounter.closeAt) {
     const timestamp = voteCount.voteCounter.closeAt.getTime() - 1000 * 60 * 60;
-    additionalNotes.push(
-      `> Action submission deadline <t:${Math.ceil(timestamp / 1000)}:f>`
-    );
+    additionalNotes.push(`> Action submission deadline <t:${Math.ceil(timestamp / 1000)}:f>`);
   }
 
-  const totalAdditionalNotes = additionalNotes.join("\n");
-  if (totalAdditionalNotes != "")
-    embed.addFields({
-      name: "Other",
-      value: totalAdditionalNotes,
-    });
+  if (additionalNotes.length > 0) {
+    embed.addFields({ name: "Other", value: additionalNotes.join("\n") });
+  }
 
   return embed;
 }
+
+
 
 const createDefaultEvent = (discordId: string): Event => {
   return {

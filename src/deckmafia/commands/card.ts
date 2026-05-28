@@ -25,7 +25,7 @@ async function getClosestCardName(cardName: string, list: string[]) {
     .sort((a: any, b: any) => b.rating - a.rating)
     .slice(0, topN)
     .map((r: any) => ({ target: r.target, rating: r.rating }));
-  console.log({ query: cardName, top });
+  //console.log({ query: cardName, top });
   return result;
 }
 
@@ -83,24 +83,31 @@ export default newSlashCommand({
     const startTime = performance.now(); // High-precision timer
     let deferred = false;
 
-    // safe wrappers to avoid throwing on Unknown interaction and to keep single reply semantics
+ // safe wrappers to avoid throwing on Unknown interaction and to keep single reply semantics
     const safeReply = async (payload: { content: string; ephemeral?: boolean }) => {
       try {
         if (i.deferred) {
           // If already deferred, edit the reply instead of replying
           return await i.editReply({ content: payload.content });
         }
-        return await i.reply({ content: payload.content, ephemeral: payload.ephemeral });
+        // FIXED: Use flags instead of ephemeral property
+        return await i.reply({ 
+          content: payload.content, 
+          flags: payload.ephemeral ? [MessageFlags.Ephemeral] : [] 
+        });
       } catch (e: any) {
         console.error('Failed to reply (safeReply):', e?.message ?? e);
-        // swallow DiscordAPIError to avoid crashing the process
         return null;
       }
     };
-
+	
     const safeFollowUp = async (payload: { content: string; ephemeral?: boolean }) => {
       try {
-        return await i.followUp({ content: payload.content, ephemeral: payload.ephemeral });
+        // FIXED: Use flags instead of ephemeral property
+        return await i.followUp({ 
+          content: payload.content, 
+          flags: payload.ephemeral ? [MessageFlags.Ephemeral] : [] 
+        });
       } catch (e: any) {
         console.error('Failed to followUp (safeFollowUp):', e?.message ?? e);
         return null;
@@ -235,7 +242,7 @@ export default newSlashCommand({
       const timeMsg = getTimeMessage(performance.now() - startTime);
       const content = `An unexpected error occurred while fetching this card.\n${timeMsg}`;
       if (deferred) return await i.editReply({ content });
-      return await i.reply({ content, ephemeral: false });
+      return await i.reply({ content, flags: [] });
     }
   },
 });

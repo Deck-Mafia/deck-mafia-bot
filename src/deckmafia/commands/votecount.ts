@@ -11,27 +11,34 @@ export default newSlashCommand({
     data: c,
     async execute(i: ChatInputCommandInteraction) {
         if (!i.guild) return;
-        
-        await i.deferReply({ flags: [MessageFlags.Ephemeral] });
+
+        // Defer immediately to prevent timeout
+        await i.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
 
         const channel = i.channel as TextChannel;
-        if (!channel.parentId) return;
+        if (!channel?.parentId) {
+            return await i.editReply({ content: 'This command can only be used in a game channel.' }).catch(() => {});
+        }
 
         const voteCounter = await checkVoteCountInChannel(i.channelId);
         if (!voteCounter) {
-            return await i.editReply({ content: 'There is no vote counter' });
+            return await i.editReply({ content: 'There is no vote counter in this channel.' }).catch(() => {});
         }
 
         try {
             const data = await calculateVoteCount(voteCounter.id, i.guild);
-            if (!data) throw Error('Could not calculate vote data');
+            if (!data) {
+                return await i.editReply({ content: 'Could not calculate vote data.' }).catch(() => {});
+            }
 
             const voteCountEmbed = await createVoteCountPost(data, i.guild);
-            await i.editReply({ embeds: [voteCountEmbed] });
-            
+            await i.editReply({ embeds: [voteCountEmbed] }).catch(() => {});
+
         } catch (err) {
-            console.error(err);         
-            await i.editReply({ content: 'Requested vote count failed unexpectedly.' });
+            console.error('[VOTECOUNT ERROR]', err);
+            await i.editReply({ 
+                content: 'There was an error while generating the vote count. Please try again.' 
+            }).catch(() => {});
         }
     },
 });

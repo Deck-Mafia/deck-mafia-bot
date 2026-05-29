@@ -6,6 +6,7 @@ import { mem } from "node-os-utils";
 import { listenerCount } from "process";
 import { database } from "../..";
 import votecount from "../commands/managevotecount";
+const isDebug = process.env.DEBUG_MODE === 'true';
 
 export function getNextInterval(): Date {
     // 2 hours in milliseconds
@@ -309,23 +310,24 @@ if (userIdsToFetch.length > 0) {
   // ==================== NON-VOTING PLAYERS  ====================
   const nonVotingPlayers: string[] = [];
   const livingRoleId = voteCounter.livingRoleId;
-  //console.log(`[DEBUG] Starting loop. PlayerStats keys: ${Object.keys(playerStats).join(', ')}`);
+  if (isDebug) console.log(`[DEBUG] Starting loop. PlayerStats keys: ${Object.keys(playerStats).join(', ')}`);
 
   for (const statKey in playerStats) {
     const stat = playerStats[statKey];
     if (statKey === '1061684614797742190') continue;
 
-	const member = guild.members.cache.get(stat.playerId);
+	let member = guild.members.cache.get(stat.playerId);
+	if (!member) { 
+		member = await guild.members.fetch(stat.playerId).catch(() => null) ?? undefined; 
+	} 
 	const name = member ? member.displayName : "Unknown";
 	const isAlive = !!stat && member?.roles.cache.has(livingRoleId);
 	const hasRole = member?.roles.cache.has(livingRoleId);
-    // Log EVERY player
-    //console.log(`[DEBUG] Processing: ${name} (${statKey}) | HasRole: ${hasRole}`);
-/* 	if (!hasRole) {
-        console.log(`[DEBUG] Skipping ${name} because HasRole is ${hasRole}`);
-        continue; 
-    } */
-    
+    if (isDebug) console.log(`[DEBUG] Processing: ${name} (${statKey}) | HasRole: ${hasRole}`); // Log EVERY player	
+	if (!hasRole) {
+		if (isDebug) console.log(`[DEBUG] Skipping ${name} because HasRole is ${hasRole}`);
+		continue; 
+	} 
     const targetId = stat.isVotingFor;
 	const targetMember = targetId ? guild.members.cache.get(targetId) : null;
     const targetStat = targetId ? playerStats[targetId] : null;
@@ -336,14 +338,16 @@ if (userIdsToFetch.length > 0) {
                              isTargetAlive;
     
 	// DEBUG: Log why it thinks they are voting
-/*     if (isActuallyVoting) {
-        console.log(`[DEBUG] ${name} is marked as ACTUALLY VOTING for ${targetMember?.displayName ?? targetId} (isTargetAlive: ${isTargetAlive})`);
-    } */
+    if (isDebug) {
+		 if (isActuallyVoting) {
+			console.log(`[DEBUG] ${name} is marked as ACTUALLY VOTING for ${targetMember?.displayName ?? targetId} (isTargetAlive: ${isTargetAlive})`);
+		}
+	}
 
     if (!isActuallyVoting) {
         const entry = `\`${name}\` <@${stat.playerId}>`; 
         nonVotingPlayers.push(entry);
-        //console.log(`[DEBUG] Pushed to nonVoting: ${name} (Reason: ${!targetId || targetId === '1061684614797742190' ? 'No target' : 'Target dead'})`);
+        if (isDebug) console.log(`[DEBUG] Pushed to nonVoting: ${name} (Reason: ${!targetId || targetId === '1061684614797742190' ? 'No target' : 'Target dead'})`);
     }
     
   }
@@ -352,7 +356,7 @@ if (userIdsToFetch.length > 0) {
   const wagonLines: string[] = [];
   for (const wagonKey in wagons) {
   const wagon = wagons[wagonKey];
-  //console.log(`[DEBUG] Found wagon on ${wagonKey} with ${wagon.length} voters:`, wagon);
+  if (isDebug) console.log(`[DEBUG] Found wagon on ${wagonKey} with ${wagon.length} voters:`, wagon);
   const targetMember = guild.members.cache.get(wagonKey);
   const wagonTop = targetMember?.displayName || `<@${wagonKey}>`;
   
@@ -387,11 +391,12 @@ if (userIdsToFetch.length > 0) {
   const match = entry.match(/<@(\d+)>/);
   return match ? `<@!${match[1]}>` : "";
   });
+  if (isDebug) {
   // --- DEBUG LINES ---
-  console.log("Display Names Array:", displayNames);
-  console.log("Spoilered Mentions Array:", spoileredMentions);
-  console.log("Spoilered Mentions Nick Array:", spoileredMentionsNickname);
-  
+	console.log("Display Names Array:", displayNames);
+	console.log("Spoilered Mentions Array:", spoileredMentions);
+	console.log("Spoilered Mentions Nick Array:", spoileredMentionsNickname);
+  }
   // -------------------
   
   //finalValue += `**Not Voting:**\n${spoileredMentionsNickname.join(", ")}\n\n`;
@@ -406,7 +411,7 @@ if (userIdsToFetch.length > 0) {
   
   // Ensure it's not empty
   const valueToSet = finalValue.trim() || "`No Votes`";
-  //console.log(`[DEBUG] Final string length: ${valueToSet.length}`);
+  if (isDebug) console.log(`[DEBUG] Final string length: ${valueToSet.length}`);
   
   // Use .addFields or .setFields (if you are editing an existing message)
   embed.addFields({ name: "Votes", value: valueToSet });

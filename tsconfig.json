@@ -14,6 +14,8 @@
     "exclude": [
         "node_modules",
         "build",
-        "backups"
+        "backups",
+		"ecosystem.config.js",
+        "deploy.sh"
     ]
 }

@@ -401,7 +401,7 @@ if (userIdsToFetch.length > 0) {
   
   //finalValue += `**Not Voting:**\n${spoileredMentionsNickname.join(", ")}\n\n`;
   finalValue += `**Not Voting:**\n${displayNames.join(", ")}\n\n`;
-  finalValue += `-# ||Mentions: ${spoileredMentions.join(" ")}||\n`;
+  //finalValue += `-# ||Mentions: ${spoileredMentions.join(" ")}||\n`;
   //finalValue += `-# ||Nickname Format: ${spoileredMentionsNickname.join(" ")}||`;
   }
   

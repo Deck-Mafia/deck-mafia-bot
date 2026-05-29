@@ -7,6 +7,11 @@ import { listenerCount } from "process";
 import { database } from "../..";
 import votecount from "../commands/managevotecount";
 
+export function getNextInterval(): Date {
+    // 2 hours in milliseconds
+    return new Date(Date.now() + 1000 * 60 * 60 * 2);
+}
+
 export async function checkGameInCategory(categoryId: string) {
   const [game] = await Promise.allSettled([
     database.registeredGame.findUnique({
@@ -366,20 +371,33 @@ if (userIdsToFetch.length > 0) {
   // 1. Create a clean list for the display names
   // We use .map to extract just the name from your previous push logic
   const displayNames = nonVotingPlayers.map(entry => {
-  	// This regex assumes your entry is formatted as `Name` <@ID>
-  	const match = entry.match(/`(.*?)`/);
-  	return match ? match[1] : "Unknown";
+  // This regex assumes your entry is formatted as `Name` <@ID>
+  const match = entry.match(/`(.*?)`/);
+  return match ? match[1] : "Unknown";
   });
   
   // 2. Create the spoilered mentions
   // We map to the raw mention <@ID> and join them without commas
   const spoileredMentions = nonVotingPlayers.map(entry => {
-  	const match = entry.match(/<@(\d+)>/);
-  	return match ? `<@${match[1]}>` : "";
+  const match = entry.match(/<@(\d+)>/);
+  return match ? `<@${match[1]}>` : "";
   });
+  // 2. New Test Mentions (Nickname format)
+  const spoileredMentionsNickname = nonVotingPlayers.map(entry => {
+  const match = entry.match(/<@(\d+)>/);
+  return match ? `<@!${match[1]}>` : "";
+  });
+  // --- DEBUG LINES ---
+  console.log("Display Names Array:", displayNames);
+  console.log("Spoilered Mentions Array:", spoileredMentions);
+  console.log("Spoilered Mentions Nick Array:", spoileredMentionsNickname);
   
-  finalValue += `**Not Voting:**\n${displayNames.join(", ")}\n\n`;
-  finalValue += `-# ||Mentions: ${spoileredMentions.join(" ")}||`;
+  // -------------------
+  
+  finalValue += `**Not Voting:**\n${spoileredMentionsNickname.join(", ")}\n\n`;
+  //finalValue += `**Not Voting:**\n${displayNames.join(", ")}\n\n`;
+  //finalValue += `-# ||Mentions: ${spoileredMentions.join(" ")}||\n`;
+  //finalValue += `-# ||Nickname Format: ${spoileredMentionsNickname.join(" ")}||`;
   }
   
   if (wagonLines.length > 0) {

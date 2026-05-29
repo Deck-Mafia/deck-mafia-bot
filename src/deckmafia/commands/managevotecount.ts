@@ -4,7 +4,7 @@ import { ChannelType, ChatInputCommandInteraction, CommandInteraction, EmbedBuil
 import { MessageFlags } from "discord.js";
 import { database, prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
-import { checkGameInCategory, checkVoteCountInChannel, createGame, createNewEvent, createPlayer, calculateVoteCount, createVoteCountPost } from '../util/voteCount';
+import { checkGameInCategory, checkVoteCountInChannel, createGame, createNewEvent, createPlayer, calculateVoteCount, createVoteCountPost, getNextInterval } from '../util/voteCount';
 
 
 const c = new SlashCommandBuilder();
@@ -107,7 +107,7 @@ async function manageVoteCount(i: ChatInputCommandInteraction) {
                 // Reset the timer since we just posted
                 await database.voteCount.update({
                     where: { id: voteCounter.id },
-                    data: { lastPeriod: new Date() },
+                    data: { lastPeriod: getNextInterval() },
                 });
                 
                 responseMessage += ' Vote count posted and timer reset.';

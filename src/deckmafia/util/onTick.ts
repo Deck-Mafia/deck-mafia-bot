@@ -1,7 +1,7 @@
 import { VoteCount } from '@prisma/client';
 import { Guild, PermissionsBitField, TextChannel } from 'discord.js';
 import { database } from '../..';
-import { calculateVoteCount, createVoteCountPost } from './voteCount';
+import { calculateVoteCount, createVoteCountPost,getNextInterval } from './voteCount';
 
 export type OnTickProps = {
 	guild: Guild;
@@ -55,12 +55,12 @@ export async function checkOnClose({ guild, voteCount }: OnTickProps): Promise<u
 
 export async function checkForRegularVoteCount({ guild, voteCount }: OnTickProps): Promise<unknown> {
     const { channelId, id, lastPeriod } = voteCount;
-    
+	
     // If no lastPeriod is set, let's initialize one now so it starts working
     if (!lastPeriod) {
         await database.voteCount.update({
             where: { id },
-            data: { lastPeriod: new Date(Date.now() + 1000 * 60 * 60 * 2) }
+            data: { lastPeriod: getNextInterval() }
         });
         return;
     }

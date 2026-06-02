@@ -355,15 +355,19 @@ if (userIdsToFetch.length > 0) {
   // ==================== WAGON CALCULATION ====================
   const wagonLines: string[] = [];
   for (const wagonKey in wagons) {
-  const wagon = wagons[wagonKey];
-  if (isDebug) console.log(`[DEBUG] Found wagon on ${wagonKey} with ${wagon.length} voters:`, wagon);
-  const targetMember = guild.members.cache.get(wagonKey);
-  const wagonTop = targetMember?.displayName || `<@${wagonKey}>`;
+	const wagon = wagons[wagonKey];
+	if (isDebug) console.log(`[DEBUG] Found wagon on ${wagonKey} with ${wagon.length} voters:`, wagon);
+	const targetMember = guild.members.cache.get(wagonKey);
+	const isTargetAlive = targetMember?.roles.cache.has(voteCounter.livingRoleId);
+	if (!isTargetAlive) {
+        if (isDebug) console.log(`[DEBUG] Skipping wagon for ${wagonKey} because they are dead.`);
+        continue;
+    }
+	const wagonTop = targetMember?.displayName || `<@${wagonKey}>`;
+	const voterNames = wagon.map(id => guild.members.cache.get(id)?.displayName || `<@${id}>`);
   
-  const voterNames = wagon.map(id => guild.members.cache.get(id)?.displayName || `<@${id}>`);
-  
-  if (wagon.length > 0) {
-  	wagonLines.push(`**${wagonTop} (${wagon.length})** - ${voterNames.join(", ")}`);
+	if (wagon.length > 0) {
+		wagonLines.push(`**${wagonTop} (${wagon.length})** - ${voterNames.join(", ")}`);
     }
   }
   

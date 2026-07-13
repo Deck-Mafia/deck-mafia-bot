@@ -84,6 +84,7 @@ model Card {
   name       String      @unique
   uri        String
   isPublic   Boolean
+  rarity     Int?
   ownedCards OwnedCard[]
 }
 

@@ -145,27 +145,38 @@ export async function processOpenPack(
 		}
 	}
 
-	// 5. Add drawn cards to the target user's inventory
-	for (const drawn of drawnCards) {
-		const fetchedCard = await prisma.card.findFirst({
-			where: { name: drawn.name },
-		});
+	// 5. Add drawn cards to the target user's inventory (with refund on failure)
+	try {
+		for (const drawn of drawnCards) {
+			const fetchedCard = await prisma.card.findFirst({
+				where: { name: drawn.name },
+			});
 
-		if (fetchedCard) {
-			await prisma.ownedCard.create({
-				data: {
-					card: {
-						connect: { id: fetchedCard.id },
-					},
-					inventory: {
-						connectOrCreate: {
-							where: { discordId: targetUserId },
-							create: { discordId: targetUserId },
+			if (fetchedCard) {
+				await prisma.ownedCard.create({
+					data: {
+						card: {
+							connect: { id: fetchedCard.id },
+						},
+						inventory: {
+							connectOrCreate: {
+								where: { discordId: targetUserId },
+								create: { discordId: targetUserId },
+							},
 						},
 					},
-				},
-			});
+				});
+			}
 		}
+	} catch (cardAddError) {
+		// Refund the booster pack
+		await prisma.ownedCard.create({
+			data: {
+				card: { connect: { id: boosterPack.cardId! } },
+				inventory: { connect: { id: boosterPack.inventoryId } },
+			},
+		});
+		throw cardAddError;
 	}
 
 	// 6. Log the pack opening to file

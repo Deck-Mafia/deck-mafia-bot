@@ -31,7 +31,7 @@ client.on(Events.ClientReady, async (c) => {
     } catch (err) {
         console.error("Failed to prime member cache:", err);
     }
-	
+
 	const commandsPath = path.join(__dirname, '..', 'deckmafia', 'commands');
 	await loadCommands(client, commandsPath, deckMafiaRest, config.discordBotClientId, deckMafiaCommands);
 

@@ -110,6 +110,12 @@ model Inventory {
   ownedCards OwnedCard[]
 }
 
+model FragmentBalance {
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  discordId String @unique
+  amount    Int    @default(0)
+}
+
 // DEI MILITES
 
 model FuseQueue {

@@ -5,32 +5,38 @@ import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
 
 const c = new SlashCommandBuilder();
 c.setName('add');
-c.setDescription('Add/change/update acard in the database');
+c.setDescription('Add or update a card in the database');
 c.addStringOption((input) => input.setName('name').setDescription('Name of the card').setRequired(true));
 c.addStringOption((input) => input.setName('url').setDescription('URL of the image').setRequired(true));
-c.addBooleanOption((i) => i.setName('public').setDescription('Is the card supposed to public and known to all? Default is no').setRequired(false));
+c.addIntegerOption((input) => input.setName('rarity').setDescription('Rarity of the card').setRequired(true));
+c.addBooleanOption((i) => i.setName('public').setDescription('Is the card supposed to be public and known to all? Default is no').setRequired(false));
 
 export default newSlashCommand({
 	data: c,
 	async execute(i: ChatInputCommandInteraction) {
 		const name = i.options.get('name', true).value as string;
 		const url = i.options.get('url', true).value as string;
+		const rarity = i.options.get('rarity', true).value as number;
 		const publicOption = i.options.get('public', false);
 		const isPublic = publicOption ? (publicOption.value as boolean) : false;
 
 		try {
-			const alreadyExists = await prisma.card.findUnique({ where: { name } });
-			if (alreadyExists) return await i.reply('Card already exists with that name');
-
-			const result = await prisma.card.create({
-				data: {
+			const result = await prisma.card.upsert({
+				where: { name: name.toLowerCase() },
+				update: {
+					uri: url,
+					isPublic,
+					rarity,
+				},
+				create: {
 					name: name.toLowerCase(),
 					uri: url,
-					isPublic: isPublic,
+					isPublic,
+					rarity,
 				},
 			});
 
-			await i.reply(`New Card: \`${result.name}\`\n${result.uri}`);
+			await i.reply(`Card \`${result.name}\` ${result.rarity !== null ? `(${result.rarity}★)` : ''} ${result.isPublic ? '(Public)' : '(Hidden)'}\n${result.uri}`);
 		} catch (err) {
 			await i.reply({
 				flags: MessageFlags.Ephemeral,

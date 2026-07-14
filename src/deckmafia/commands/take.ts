@@ -44,6 +44,30 @@ async function getClosestCardName(cardName: string, list: string[]) {
 }
 
 async function removeCard(i: ChatInputCommandInteraction, cardName: string, user: User) {
+	// Fragment fallback: use FragmentBalance instead of OwnedCard
+	if (cardName.toLowerCase() === 'fragment') {
+		const balance = await prisma.fragmentBalance.findUnique({
+			where: { discordId: user.id },
+			select: { amount: true },
+		});
+
+		const currentAmount = balance?.amount ?? 0;
+		if (currentAmount === 0) {
+			return i.followUp({ content: `\`${user.username}\` has no Fragments.`, flags: MessageFlags.Ephemeral });
+		}
+
+		if (currentAmount === 1) {
+			await prisma.fragmentBalance.delete({ where: { discordId: user.id } });
+		} else {
+			await prisma.fragmentBalance.update({
+				where: { discordId: user.id },
+				data: { amount: { decrement: 1 } },
+			});
+		}
+		await i.followUp({ content: `\`fragment\` removed from ${user.username} (Fragment balance)` });
+		return;
+	}
+
 	const fetchedCard = await prisma.card.findFirst({
 		where: {
 			name: cardName.toLowerCase(),

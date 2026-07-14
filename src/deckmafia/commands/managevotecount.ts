@@ -53,6 +53,18 @@ c.addSubcommand((x) =>
         .addStringOption(x => x.setName('id').setDescription('The ID from the /list command').setRequired(true))
 );
 
+c.addSubcommand((x) =>
+    x.setName('update')
+        .setDescription('Update a vote counter')
+        .addChannelOption((x) => x.setName('channel').setDescription('Channel with the vote counter (defaults to this channel)').setRequired(false))
+        .addRoleOption((x) => x.setName('alive').setDescription('Role which they have when alive').setRequired(false))
+        .addBooleanOption((x) => x.setName('majority').setDescription('Enable majority').setRequired(false))
+        .addBooleanOption((x) => x.setName('plurality').setDescription('Enable plurality').setRequired(false))
+        .addBooleanOption((x) => x.setName('locked').setDescription('Lock votes. Votes cannot be changed once they have been made').setRequired(false))
+        .addBooleanOption((x) => x.setName('hammered').setDescription('Force hammer state').setRequired(false))
+        .addIntegerOption((x) => x.setName('closeat').setDescription('Timestamp to lock thread, close VC at').setRequired(false))
+);
+
 
 export default newSlashCommand({
 	data: c,
@@ -69,7 +81,9 @@ export default newSlashCommand({
                 return listActiveGames(i); 
             case 'close':
                 const id = i.options.getString('id', true);
-                return closeGame(i, id);   
+                return closeGame(i, id);
+            case 'update':
+                return updateVoteCount(i);
 			default:
 				return;
 		}
@@ -247,6 +261,55 @@ async function closeGame(i: CommandInteraction, voteCountId: string) {
             content: "Could not find a vote count with that ID or a database error occurred.", 
             flags: [MessageFlags.Ephemeral] 
         });
+    }
+}
+
+async function updateVoteCount(i: ChatInputCommandInteraction) {
+    if (!i.guild) return;
+    await i.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const targetChannel = i.options.getChannel('channel', false) ?? i.channel!;
+    const voteCounter = await checkVoteCountInChannel(targetChannel.id);
+    if (!voteCounter) return i.editReply(`Vote Counter does not exist in <#${targetChannel.id}>`);
+
+    const aliveRole = i.options.getRole('alive', false);
+    const majority = i.options.getBoolean('majority', false);
+    const plurality = i.options.getBoolean('plurality', false);
+    const locked = i.options.getBoolean('locked', false);
+    const hammered = i.options.getBoolean('hammered', false);
+    const closeAtStamp = i.options.getInteger('closeat', false);
+
+    // Build update data from only the provided options
+    const updateData: Record<string, unknown> = {};
+
+    if (aliveRole) updateData.livingRoleId = aliveRole.id;
+    if (majority !== null) updateData.majority = majority;
+    if (plurality !== null) updateData.plurality = plurality;
+    if (locked !== null) updateData.lockedVotes = locked;
+    if (hammered !== null) updateData.hammered = hammered;
+    if (closeAtStamp !== null) {
+        updateData.closeAt = closeAtStamp ? new Date(closeAtStamp * 1000) : null;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+        return i.editReply('No options provided to update.');
+    }
+
+    try {
+        await database.voteCount.update({
+            where: { id: voteCounter.id },
+            data: updateData,
+        });
+
+        const changedFields = Object.keys(updateData)
+            .map(k => `\`${k}\``)
+            .join(', ');
+        await i.editReply(`Vote counter updated. Changed: ${changedFields}`);
+
+        if (closeAtStamp) await i.followUp(`**Day end <t:${closeAtStamp}:R>**`);
+    } catch (err) {
+        console.error(err);
+        return i.editReply('An error occurred while updating the vote counter.');
     }
 }
 

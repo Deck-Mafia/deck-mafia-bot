@@ -3,10 +3,10 @@ import { appendFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { prisma } from '../..';
 
-const LOG_FILE = join(process.cwd(), 'logs', 'pack-openings.log');
+const LOG_FILE = join(process.cwd(), 'rands', 'pack-openings.log');
 
 function ensureLogDir() {
-	const dir = join(process.cwd(), 'logs');
+	const dir = join(process.cwd(), 'rands');
 	if (!existsSync(dir)) mkdirSync(dir);
 }
 

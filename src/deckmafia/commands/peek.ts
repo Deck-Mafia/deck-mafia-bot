@@ -22,6 +22,54 @@ c.addUserOption((i) =>
     .setRequired(false)
 );
 
+function buildPageContent(
+  username: string,
+  cardCounts: Record<string, number>,
+  totalCards: number,
+  page: number
+): string {
+  const start = page * cardsPerPage;
+  const slicedCards = Object.entries(cardCounts).slice(start, start + cardsPerPage);
+
+  let value = `\`\`\`diff\nINVENTORY FOR ${username.toUpperCase()}\n- ${totalCards} CARDS TOTAL\n\n`;
+
+  slicedCards.forEach(([cardName, count]) => {
+    value += `+ ${cardName} x${count}\n`;
+  });
+
+  value += `\nPage ${page + 1} of ${Math.ceil(
+    Object.keys(cardCounts).length / cardsPerPage
+  )}\n\`\`\``;
+
+  return value;
+}
+
+function buildComponents(cardCounts: Record<string, number>, page: number) {
+  const hasMultiplePages =
+    Math.ceil(Object.keys(cardCounts).length / cardsPerPage) > 1;
+
+  return hasMultiplePages
+    ? [
+        new ActionRowBuilder<ButtonBuilder>()
+          .setComponents(
+            new ButtonBuilder()
+              .setCustomId("peek-prev-page")
+              .setLabel("Previous Page")
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(page === 0),
+            new ButtonBuilder()
+              .setCustomId("peek-next-page")
+              .setLabel("Next Page")
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(
+                page === Math.floor(Object.keys(cardCounts).length / cardsPerPage)
+              )
+          )
+          .toJSON(),
+      ]
+    : [];
+}
+
 export default newSlashCommand({
   data: c,
   async execute(i: ChatInputCommandInteraction) {
@@ -38,92 +86,53 @@ export default newSlashCommand({
       }
 
       try {
-        const inventory = await prisma.inventory.findUnique({
-          where: {
-            discordId: user.id,
-          },
-          include: {
-            ownedCards: {
-              select: {
-                cardId: true,
-                card: {
-                  select: {
-                    name: true,
-                  },
+        const [inventory, fragmentBalance] = await Promise.all([
+          prisma.inventory.findUnique({
+            where: { discordId: user.id },
+            include: {
+              ownedCards: {
+                select: {
+                  cardId: true,
+                  card: { select: { name: true } },
                 },
               },
             },
-          },
-        });
+          }),
+          prisma.fragmentBalance.findUnique({
+            where: { discordId: user.id },
+            select: { amount: true },
+          }),
+        ]);
 
         if (!inventory)
           return i.reply({
-            content:
-              "User does not have an inventory. To make one, use the `/give` command.",
+            content: "User does not have an inventory. To make one, use the `/give` command.",
           });
 
-        const cardCounts = inventory.ownedCards.reduce((acc, ownedCard) => {
-          //@ts-ignore
-          const cardName = ownedCard.card.name;
-          //@ts-ignore
-          acc[cardName] = (acc[cardName] || 0) + 1;
-          return acc;
-        }, {});
+        const fragmentAmount = fragmentBalance?.amount ?? 0;
+
+        const cardCounts: Record<string, number> = inventory.ownedCards.reduce(
+          (acc: Record<string, number>, ownedCard) => {
+            //@ts-ignore
+            const cardName: string = ownedCard.card.name;
+            acc[cardName] = (acc[cardName] || 0) + 1;
+            return acc;
+          },
+          {}
+        );
+
+        if (fragmentAmount > 0) {
+          cardCounts["Fragment"] = fragmentAmount;
+        }
+
+        const totalCards = inventory.ownedCards.length + (fragmentAmount > 0 ? 1 : 0);
 
         let page = 0;
 
-        const initialReply = async () => {
-          const start = page * cardsPerPage;
-          const end = start + cardsPerPage;
-          const slicedCards = Object.entries(cardCounts).slice(start, end);
-
-          let value = `\`\`\`diff\nINVENTORY FOR ${user.username.toUpperCase()}\n- ${
-            inventory.ownedCards.length
-          } CARDS TOTAL\n\n`;
-
-          slicedCards.forEach(([cardName, count]) => {
-            value += `+ ${cardName} x${count}\n`;
-          });
-
-          value += `\nPage ${page + 1} of ${Math.ceil(
-            Object.keys(cardCounts).length / cardsPerPage
-          )}\n\`\`\``;
-
-          const hasMultiplePages =
-            Math.ceil(Object.keys(cardCounts).length / cardsPerPage) > 1;
-
-          const components = hasMultiplePages
-            ? [
-                new ActionRowBuilder<ButtonBuilder>()
-                  .setComponents(
-                    new ButtonBuilder()
-                      .setCustomId("peek-prev-page")
-                      .setLabel("Previous Page")
-                      .setStyle(ButtonStyle.Secondary)
-                      .setDisabled(page === 0),
-                    new ButtonBuilder()
-                      .setCustomId("peek-next-page")
-                      .setLabel("Next Page")
-                      .setStyle(ButtonStyle.Secondary)
-                      .setDisabled(
-                        page ===
-                          Math.floor(
-                            Object.keys(cardCounts).length / cardsPerPage
-                          )
-                      )
-                  )
-                  .toJSON(),
-              ]
-            : [];
-
-          const reply = await i.reply({
-            content: value,
-            components,
-          });
-          return reply;
-        };
-
-        const initialReplyInteraction = await initialReply();
+        const initialReplyInteraction = await i.reply({
+          content: buildPageContent(user.username, cardCounts, totalCards, page),
+          components: buildComponents(cardCounts, page),
+        });
 
         const collector = i.channel?.createMessageComponentCollector({
           filter: (interaction) =>
@@ -138,63 +147,20 @@ export default newSlashCommand({
             interaction.customId === "peek-prev-page" ||
             interaction.customId === "peek-next-page"
           ) {
+            await interaction.deferUpdate();
+
             if (interaction.customId === "peek-prev-page") {
-              await interaction.deferUpdate();
               page = Math.max(0, page - 1);
-            } else if (interaction.customId === "peek-next-page") {
-              await interaction.deferUpdate();
+            } else {
               page = Math.min(
                 Math.floor(Object.keys(cardCounts).length / cardsPerPage),
                 page + 1
               );
             }
 
-            const start = page * cardsPerPage;
-            const end = start + cardsPerPage;
-            const slicedCards = Object.entries(cardCounts).slice(start, end);
-
-            let value = `\`\`\`diff\nINVENTORY FOR ${user.username.toUpperCase()}\n- ${
-              inventory.ownedCards.length
-            } CARDS TOTAL\n\n`;
-
-            slicedCards.forEach(([cardName, count]) => {
-              value += `+ ${cardName} x${count}\n`;
-            });
-
-            value += `\nPage ${page + 1} of ${Math.ceil(
-              Object.keys(cardCounts).length / cardsPerPage
-            )}\n\`\`\``;
-
-            const hasMultiplePages =
-              Math.ceil(Object.keys(cardCounts).length / cardsPerPage) > 1;
-
-            const updatedComponents = hasMultiplePages
-              ? [
-                  new ActionRowBuilder<ButtonBuilder>()
-                    .setComponents(
-                      new ButtonBuilder()
-                        .setCustomId("peek-prev-page")
-                        .setLabel("Previous Page")
-                        .setStyle(ButtonStyle.Secondary)
-                        .setDisabled(page === 0),
-                      new ButtonBuilder()
-                        .setCustomId("peek-next-page")
-                        .setLabel("Next Page")
-                        .setStyle(ButtonStyle.Secondary)
-                        .setDisabled(
-                          page ===
-                            Math.floor(
-                              Object.keys(cardCounts).length / cardsPerPage
-                            )
-                        )
-                    )
-                    .toJSON(),
-                ]
-              : [];
-
             await initialReplyInteraction.edit({
-              content: value,
-              components: updatedComponents,
+              content: buildPageContent(user.username, cardCounts, totalCards, page),
+              components: buildComponents(cardCounts, page),
             });
           }
         });
@@ -215,92 +181,53 @@ export default newSlashCommand({
       }
     } else {
       try {
-        const inventory = await prisma.inventory.findUnique({
-          where: {
-            discordId: i.user.id,
-          },
-          include: {
-            ownedCards: {
-              select: {
-                cardId: true,
-                card: {
-                  select: {
-                    name: true,
-                  },
+        const [inventory, fragmentBalance] = await Promise.all([
+          prisma.inventory.findUnique({
+            where: { discordId: i.user.id },
+            include: {
+              ownedCards: {
+                select: {
+                  cardId: true,
+                  card: { select: { name: true } },
                 },
               },
             },
-          },
-        });
+          }),
+          prisma.fragmentBalance.findUnique({
+            where: { discordId: i.user.id },
+            select: { amount: true },
+          }),
+        ]);
 
         if (!inventory)
           return i.reply({
-            content:
-              "User does not have an inventory. To make one, use the `/give` command.",
+            content: "User does not have an inventory. To make one, use the `/give` command.",
           });
 
-        const cardCounts = inventory.ownedCards.reduce((acc, ownedCard) => {
-          //@ts-ignore
-          const cardName = ownedCard.card.name;
-          //@ts-ignore
-          acc[cardName] = (acc[cardName] || 0) + 1;
-          return acc;
-        }, {});
+        const fragmentAmount = fragmentBalance?.amount ?? 0;
+
+        const cardCounts: Record<string, number> = inventory.ownedCards.reduce(
+          (acc: Record<string, number>, ownedCard) => {
+            //@ts-ignore
+            const cardName: string = ownedCard.card.name;
+            acc[cardName] = (acc[cardName] || 0) + 1;
+            return acc;
+          },
+          {}
+        );
+
+        if (fragmentAmount > 0) {
+          cardCounts["Fragment"] = fragmentAmount;
+        }
+
+        const totalCards = inventory.ownedCards.length + (fragmentAmount > 0 ? 1 : 0);
 
         let page = 0;
 
-        const initialReply = async () => {
-          const start = page * cardsPerPage;
-          const end = start + cardsPerPage;
-          const slicedCards = Object.entries(cardCounts).slice(start, end);
-
-          let value = `\`\`\`diff\nINVENTORY FOR ${i.user.username.toUpperCase()}\n- ${
-            inventory.ownedCards.length
-          } CARDS TOTAL\n\n`;
-
-          slicedCards.forEach(([cardName, count]) => {
-            value += `+ ${cardName} x${count}\n`;
-          });
-
-          value += `\nPage ${page + 1} of ${Math.ceil(
-            Object.keys(cardCounts).length / cardsPerPage
-          )}\n\`\`\``;
-
-          const hasMultiplePages =
-            Math.ceil(Object.keys(cardCounts).length / cardsPerPage) > 1;
-
-          const components = hasMultiplePages
-            ? [
-                new ActionRowBuilder<ButtonBuilder>()
-                  .setComponents(
-                    new ButtonBuilder()
-                      .setCustomId("peek-prev-page")
-                      .setLabel("Previous Page")
-                      .setStyle(ButtonStyle.Secondary)
-                      .setDisabled(page === 0),
-                    new ButtonBuilder()
-                      .setCustomId("peek-next-page")
-                      .setLabel("Next Page")
-                      .setStyle(ButtonStyle.Secondary)
-                      .setDisabled(
-                        page ===
-                          Math.floor(
-                            Object.keys(cardCounts).length / cardsPerPage
-                          )
-                      )
-                  )
-                  .toJSON(),
-              ]
-            : [];
-
-          const reply = await i.reply({
-            content: value,
-            components,
-          });
-          return reply;
-        };
-
-        const initialReplyInteraction = await initialReply();
+        const initialReplyInteraction = await i.reply({
+          content: buildPageContent(i.user.username, cardCounts, totalCards, page),
+          components: buildComponents(cardCounts, page),
+        });
 
         const collector = i.channel?.createMessageComponentCollector({
           filter: (interaction) =>
@@ -315,63 +242,20 @@ export default newSlashCommand({
             interaction.customId === "peek-prev-page" ||
             interaction.customId === "peek-next-page"
           ) {
+            await interaction.deferUpdate();
+
             if (interaction.customId === "peek-prev-page") {
-              await interaction.deferUpdate();
               page = Math.max(0, page - 1);
-            } else if (interaction.customId === "peek-next-page") {
-              await interaction.deferUpdate();
+            } else {
               page = Math.min(
                 Math.floor(Object.keys(cardCounts).length / cardsPerPage),
                 page + 1
               );
             }
 
-            const start = page * cardsPerPage;
-            const end = start + cardsPerPage;
-            const slicedCards = Object.entries(cardCounts).slice(start, end);
-
-            let value = `\`\`\`diff\nINVENTORY FOR ${i.user.username.toUpperCase()}\n- ${
-              inventory.ownedCards.length
-            } CARDS TOTAL\n\n`;
-
-            slicedCards.forEach(([cardName, count]) => {
-              value += `+ ${cardName} x${count}\n`;
-            });
-
-            value += `\nPage ${page + 1} of ${Math.ceil(
-              Object.keys(cardCounts).length / cardsPerPage
-            )}\n\`\`\``;
-
-            const hasMultiplePages =
-              Math.ceil(Object.keys(cardCounts).length / cardsPerPage) > 1;
-
-            const updatedComponents = hasMultiplePages
-              ? [
-                  new ActionRowBuilder<ButtonBuilder>()
-                    .setComponents(
-                      new ButtonBuilder()
-                        .setCustomId("peek-prev-page")
-                        .setLabel("Previous Page")
-                        .setStyle(ButtonStyle.Secondary)
-                        .setDisabled(page === 0),
-                      new ButtonBuilder()
-                        .setCustomId("peek-next-page")
-                        .setLabel("Next Page")
-                        .setStyle(ButtonStyle.Secondary)
-                        .setDisabled(
-                          page ===
-                            Math.floor(
-                              Object.keys(cardCounts).length / cardsPerPage
-                            )
-                        )
-                    )
-                    .toJSON(),
-                ]
-              : [];
-
             await initialReplyInteraction.edit({
-              content: value,
-              components: updatedComponents,
+              content: buildPageContent(i.user.username, cardCounts, totalCards, page),
+              components: buildComponents(cardCounts, page),
             });
           }
         });

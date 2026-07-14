@@ -7,8 +7,6 @@ import { MessageFlags } from "discord.js";
 import { prisma } from "../..";
 import { newSlashCommand } from "../../structures/SlashCommand";
 
-const FRAGMENT_CARD_NAME = "fragment";
-
 const c = new SlashCommandBuilder();
 c.setName("fragments");
 c.setDescription("Give or take Fragments from a user (Admin only)");
@@ -87,35 +85,12 @@ async function handleGive(i: ChatInputCommandInteraction) {
   await i.deferReply();
 
   try {
-    const fragmentCard = await prisma.card.findFirst({
-      where: { name: FRAGMENT_CARD_NAME },
-      select: { id: true },
-    });
-
-    if (!fragmentCard) {
-      return i.editReply({
-        content: `**System Error:** The \`${FRAGMENT_CARD_NAME}\` card does not exist in the database. Add it first with \`/add name:fragment url:... rarity:0 public:true\`.`,
-      });
-    }
-
-    // Ensure the target user has an inventory
-    const inventory = await prisma.inventory.upsert({
+    // Atomic upsert: create the balance row if it doesn't exist, increment if it does
+    await prisma.fragmentBalance.upsert({
       where: { discordId: targetUser.id },
-      create: { discordId: targetUser.id },
-      update: {},
+      create: { discordId: targetUser.id, amount },
+      update: { amount: { increment: amount } },
     });
-
-    // Create the requested number of fragment OwnedCards
-    const creates = Array.from({ length: amount }, () =>
-      prisma.ownedCard.create({
-        data: {
-          card: { connect: { id: fragmentCard.id } },
-          inventory: { connect: { id: inventory.id } },
-        },
-      })
-    );
-
-    await prisma.$transaction(creates);
 
     await i.editReply({
       content: `Gave **${amount}** Fragment(s) to <@${targetUser.id}>.`,
@@ -135,47 +110,42 @@ async function handleTake(i: ChatInputCommandInteraction) {
   await i.deferReply();
 
   try {
-    const fragmentCard = await prisma.card.findFirst({
-      where: { name: FRAGMENT_CARD_NAME },
-      select: { id: true },
+    // Fetch current balance
+    const balance = await prisma.fragmentBalance.findUnique({
+      where: { discordId: targetUser.id },
+      select: { amount: true },
     });
 
-    if (!fragmentCard) {
+    const currentAmount = balance?.amount ?? 0;
+
+    if (currentAmount === 0) {
       return i.editReply({
-        content: `**System Error:** The \`${FRAGMENT_CARD_NAME}\` card does not exist in the database.`,
-      });
-    }
-
-    // Fetch up to `amount` fragments owned by the target user
-    const userFragments = await prisma.ownedCard.findMany({
-      where: {
-        cardId: fragmentCard.id,
-        inventory: { discordId: targetUser.id },
-      },
-      take: amount,
-      orderBy: { id: "asc" },
-      select: { id: true },
-    });
-
-    const removed = userFragments.length;
-
-    if (removed > 0) {
-      await prisma.ownedCard.deleteMany({
-        where: { id: { in: userFragments.map((f) => f.id) } },
-      });
-    }
-
-    if (removed === 0) {
-      await i.editReply({
         content: `<@${targetUser.id}> has no Fragments to remove. Nothing was changed.`,
       });
-    } else if (removed < amount) {
+    }
+
+    const toRemove = Math.min(currentAmount, amount);
+
+    if (toRemove === currentAmount) {
+      // Removing all fragments — just delete the row
+      await prisma.fragmentBalance.delete({
+        where: { discordId: targetUser.id },
+      });
+    } else {
+      // Partial removal
+      await prisma.fragmentBalance.update({
+        where: { discordId: targetUser.id },
+        data: { amount: { decrement: toRemove } },
+      });
+    }
+
+    if (toRemove < amount) {
       await i.editReply({
-        content: `<@${targetUser.id}> only had **${removed}** Fragment(s), which have all been removed (requested ${amount}). Their Fragments are now zeroed out.`,
+        content: `<@${targetUser.id}> only had **${toRemove}** Fragment(s), which have all been removed (requested ${amount}). Their Fragments are now zeroed out.`,
       });
     } else {
       await i.editReply({
-        content: `Removed **${removed}** Fragment(s) from <@${targetUser.id}>.`,
+        content: `Removed **${toRemove}** Fragment(s) from <@${targetUser.id}>.`,
       });
     }
   } catch (err) {

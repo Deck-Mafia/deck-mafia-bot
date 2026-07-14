@@ -7,8 +7,6 @@ import {
 import { prisma } from '../..';
 import { newSlashCommand } from '../../structures/SlashCommand';
 
-const FRAGMENT_CARD_NAME = 'fragment';
-
 const CRAFT_COSTS: Record<number, number> = {
 	3: 4,
 	4: 10,
@@ -61,40 +59,31 @@ export default newSlashCommand({
 				});
 			}
 
-			// 2. Check the user's inventory for fragments
-			const fragmentCard = await prisma.card.findFirst({
-				where: { name: FRAGMENT_CARD_NAME },
-				select: { id: true },
-			});
-
-			if (!fragmentCard) {
-				return i.editReply({
-					content: `**System Error:** The \`${FRAGMENT_CARD_NAME}\` card does not exist in the database. Contact an admin.`,
-				});
-			}
-
-			const userFragments = await prisma.ownedCard.findMany({
+			// 2. Atomically deduct fragments. Only succeeds if the user has enough.
+			const result = await prisma.fragmentBalance.updateMany({
 				where: {
-					cardId: fragmentCard.id,
-					inventory: { discordId: targetUserId },
+					discordId: targetUserId,
+					amount: { gte: requiredFragments },
 				},
-				take: requiredFragments,
-				orderBy: { id: 'asc' },
+				data: {
+					amount: { decrement: requiredFragments },
+				},
 			});
 
-			if (userFragments.length < requiredFragments) {
+			if (result.count === 0) {
+				// Either no FragmentBalance row exists, or not enough fragments
+				const balance = await prisma.fragmentBalance.findUnique({
+					where: { discordId: targetUserId },
+					select: { amount: true },
+				});
+				const currentAmount = balance?.amount ?? 0;
+
 				return i.editReply({
-					content: `You don't have enough Fragments. You need **${requiredFragments}** Fragments to craft a ${rarity}★ card, but you only have **${userFragments.length}**.`,
+					content: `You don't have enough Fragments. You need **${requiredFragments}** Fragments to craft a ${rarity}★ card, but you only have **${currentAmount}**.`,
 				});
 			}
 
-			// 3. Deduct fragments (delete the required number of OwnedCard rows)
-			const fragmentIdsToDelete = userFragments.slice(0, requiredFragments).map((f) => f.id);
-			await prisma.ownedCard.deleteMany({
-				where: { id: { in: fragmentIdsToDelete } },
-			});
-
-			// 4. Add the crafted card to the user's inventory
+			// 3. Add the crafted card to the user's inventory
 			await prisma.ownedCard.create({
 				data: {
 					card: { connect: { id: targetCard.id } },
@@ -107,7 +96,7 @@ export default newSlashCommand({
 				},
 			});
 
-			// 5. Post the card image to the channel
+			// 4. Post the card image to the channel
 			const channel = i.channel;
 			if (channel && channel.isTextBased() && !channel.isDMBased() && targetCard.uri) {
 				await (channel as TextChannel).send({
@@ -115,7 +104,7 @@ export default newSlashCommand({
 				});
 			}
 
-			// 6. Build and send the summary embed
+			// 5. Build and send the summary embed
 			const rarityLabels: Record<number, string> = {
 				3: '3★',
 				4: '4★',

@@ -14,8 +14,11 @@ const PULLABLE_RARITIES = [0, 3, 4, 5, 6];
 
 const c = new SlashCommandBuilder();
 c.setName('hiddenmenu');
-c.setDescription('Draw a single card from the Hidden Menu (Admin only)');
+c.setDescription('Draw a single card from the Hidden Menu and give it to a user (Admin only)');
 c.setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+c.addUserOption((o) =>
+	o.setName('user').setDescription('The user who will receive the drawn card').setRequired(true)
+);
 
 export default newSlashCommand({
 	data: c,
@@ -31,6 +34,8 @@ export default newSlashCommand({
 				flags: MessageFlags.Ephemeral,
 			});
 		}
+
+		const targetUser = i.options.getUser('user', true);
 
 		await i.deferReply();
 
@@ -54,11 +59,32 @@ export default newSlashCommand({
 			// Equal odds — flat random pick from the entire pool
 			const drawnCard = hiddenMenuCards[Math.floor(Math.random() * hiddenMenuCards.length)];
 
+			// Add the drawn card to the target user's inventory
+			const fetchedCard = await prisma.card.findUnique({
+				where: { id: drawnCard.id },
+			});
+
+			if (fetchedCard) {
+				await prisma.ownedCard.create({
+					data: {
+						card: {
+							connect: { id: fetchedCard.id },
+						},
+						inventory: {
+							connectOrCreate: {
+								where: { discordId: targetUser.id },
+								create: { discordId: targetUser.id },
+							},
+						},
+					},
+				});
+			}
+
 			// Post the card image to the channel
 			const channel = i.channel;
 			if (channel && channel.isTextBased() && !channel.isDMBased() && drawnCard.uri) {
 				await (channel as TextChannel).send({
-					content: `Hidden Menu draw:\n${drawnCard.uri}`,
+					content: `Hidden Menu draw for <@${targetUser.id}>:\n${drawnCard.uri}`,
 				});
 			}
 
@@ -73,7 +99,7 @@ export default newSlashCommand({
 
 			const embed = new EmbedBuilder();
 			embed.setTitle('Hidden Menu Draw');
-			embed.setDescription(`Drew 1 card from the Hidden Menu!`);
+			embed.setDescription(`Drew 1 card from the Hidden Menu for <@${targetUser.id}>!`);
 			embed.setColor(0xf8f98e);
 			embed.setThumbnail(i.guild.iconURL());
 
@@ -82,7 +108,7 @@ export default newSlashCommand({
 				value: `\`${drawnCard.name}\` — ${rarityLabels[drawnCard.rarity ?? -99] ?? `${drawnCard.rarity}★`}`,
 			});
 
-			embed.setFooter({ text: 'Use /give to add this card to a player\'s inventory.' });
+			embed.setFooter({ text: 'Card has been added to the target user\'s inventory.' });
 
 			await i.editReply({ content: 'Hidden Menu draw complete!', embeds: [embed] });
 		} catch (err) {

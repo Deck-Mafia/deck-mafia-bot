@@ -53,6 +53,11 @@ export async function checkOnClose({ guild, voteCount }: OnTickProps): Promise<u
 				const embed = await createVoteCountPost(vc, guild);
 				if (channel.isTextBased()) channel.send({ content: 'Day has ended', embeds: [embed] });
 			}
+
+			// Clean up all ActionEvents now that the final vote count has posted
+			await database.actionEvent.deleteMany({
+				where: { voteCountId: id },
+			});
 		}
 	}
 

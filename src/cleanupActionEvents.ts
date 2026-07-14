@@ -72,6 +72,17 @@ async function cleanup(prisma: PrismaClient) {
 
 	console.log('');
 	console.log(`Total VoteCounts deleted: ${totalVCsDeleted}`);
+
+	// 4. Orphan sweep: delete any ActionEvents whose parent VoteCount no longer exists
+	console.log('');
+	console.log('Sweeping orphaned ActionEvents...');
+
+	const allVCIds = (await prisma.voteCount.findMany({ select: { id: true } })).map(v => v.id);
+	const orphanResult = await prisma.actionEvent.deleteMany({
+		where: { voteCountId: { notIn: allVCIds } },
+	});
+	console.log(`  → Deleted ${orphanResult.count} orphaned ActionEvent(s)`);
+
 	console.log('');
 	console.log('=== ACTION EVENT CLEANUP COMPLETE ===');
 }

@@ -1,13 +1,12 @@
-import { ChatInputCommandInteraction, TextChannel } from 'discord.js';
+import { ChatInputCommandInteraction } from 'discord.js';
 import { appendFileSync, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
 import { prisma } from '../..';
 
-const LOG_FILE = join(process.cwd(), 'rands', 'pack-openings.log');
+const LOG_FILE = '/home/botdev/rands/pack-openings.log';
 
 function ensureLogDir() {
-	const dir = join(process.cwd(), 'rands');
-	if (!existsSync(dir)) mkdirSync(dir);
+	const dir = '/home/botdev/rands';
+	if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 }
 
 export const BOOSTER_PACK_NAME = 'booster pack';

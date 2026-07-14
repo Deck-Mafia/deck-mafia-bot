@@ -10,6 +10,7 @@ import { processOpenPack } from '../util/openPackLogic';
 const c = new SlashCommandBuilder();
 c.setName('openpack');
 c.setDescription('Open one of your Booster Packs');
+c.setDefaultMemberPermissions(null);
 
 export default newSlashCommand({
 	data: c,

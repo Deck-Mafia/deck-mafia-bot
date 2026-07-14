@@ -34,22 +34,6 @@ client.on(Events.ClientReady, async (c) => {
 	
 	const commandsPath = path.join(__dirname, '..', 'deckmafia', 'commands');
 	await loadCommands(client, commandsPath, deckMafiaRest, config.discordBotClientId, deckMafiaCommands);
-
-	// Also register openpack/adminopenpack directly to the guild for instant propagation
-	const guildOpenPack = deckMafiaCommands.get('openpack');
-	const guildAdminOpenPack = deckMafiaCommands.get('adminopenpack');
-	if (guildOpenPack && guildAdminOpenPack) {
-		try {
-			const guildCommandList = [guildOpenPack.data.toJSON(), guildAdminOpenPack.data.toJSON()];
-			await deckMafiaRest.put(
-				Routes.applicationGuildCommands(config.discordBotClientId, config.serverMain),
-				{ body: guildCommandList },
-			);
-			console.log('Registered openpack + adminopenpack to guild config.serverMain');
-		} catch (err) {
-			console.error('Failed to register guild commands:', err);
-		}
-	}
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

@@ -42,6 +42,17 @@ async function getClosestCardName(cardName: string, list: string[]) {
 }
 
 async function fetchCardData(i: CommandInteraction, cardName: string, user: User) {
+	// Fragment fallback: use FragmentBalance instead of OwnedCard
+	if (cardName.toLowerCase() === 'fragment') {
+		await prisma.fragmentBalance.upsert({
+			where: { discordId: user.id },
+			create: { discordId: user.id, amount: 1 },
+			update: { amount: { increment: 1 } },
+		});
+		await i.followUp({ content: `\`fragment\` added to ${user.username} (Fragment balance)` });
+		return;
+	}
+
 	const fetchedCard = await prisma.card.findFirst({
 		where: {
 			name: cardName.toLowerCase(),

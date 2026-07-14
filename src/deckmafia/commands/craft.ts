@@ -1,9 +1,11 @@
 import {
 	ChatInputCommandInteraction,
 	EmbedBuilder,
+	PermissionFlagsBits,
 	SlashCommandBuilder,
 	TextChannel,
 } from 'discord.js';
+import { MessageFlags } from 'discord.js';
 import { prisma } from '../..';
 import { newSlashCommand } from '../../structures/SlashCommand';
 
@@ -28,6 +30,17 @@ export default newSlashCommand({
 	data: c,
 	async execute(i: ChatInputCommandInteraction) {
 		if (!i.guild) return;
+
+		// Channel gate: only allow in ticket-#### channels unless admin
+		const channelName = (i.channel as TextChannel)?.name ?? '';
+		//@ts-ignore
+		const isAdmin = i.guild.members.cache.get(i.user.id)?.permissions.has(PermissionFlagsBits.Administrator);
+		if (!/^ticket-\d+$/.test(channelName) && !isAdmin) {
+			return i.reply({
+				content: 'This command can only be used in a ticket channel (`ticket-####`).',
+				flags: MessageFlags.Ephemeral,
+			});
+		}
 
 		await i.deferReply();
 

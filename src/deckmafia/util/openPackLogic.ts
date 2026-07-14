@@ -188,9 +188,10 @@ export async function processOpenPack(
 		6: '6★',
 	};
 
+	const targetTag = i.guild?.members.cache.get(targetUserId)?.user.tag ?? targetUserId;
 	const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
 	const lines: string[] = [];
-	lines.push(`[${timestamp}] ${openerTag} opened a booster pack for ${targetUserId} | Extra: ${extraSlot ? 'yes' : 'no'} | Channel:#${channelName}`);
+	lines.push(`[${timestamp}] ${openerTag} opened a booster pack for ${targetTag} | Extra: ${extraSlot ? 'yes' : 'no'} | Channel:#${channelName}`);
 	for (let idx = 0; idx < drawnCards.length; idx++) {
 		const card = drawnCards[idx];
 		const label = rarityLabelsLog[card.rarity] ?? `${card.rarity}★`;

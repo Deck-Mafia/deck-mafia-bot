@@ -35,16 +35,6 @@ client.on(Events.ClientReady, async (c) => {
 	const commandsPath = path.join(__dirname, '..', 'deckmafia', 'commands');
 	await loadCommands(client, commandsPath, deckMafiaRest, config.discordBotClientId, deckMafiaCommands);
 
-	// One-time cleanup: wipe stale guild commands from the earlier dual-registration
-	try {
-		await deckMafiaRest.put(
-			Routes.applicationGuildCommands(config.discordBotClientId, config.serverMain),
-			{ body: [] },
-		);
-		console.log('Cleared stale guild commands from serverMain');
-	} catch (err) {
-		console.error('Failed to clear guild commands:', err);
-	}
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

@@ -1,12 +1,11 @@
 /**
  * Fragment Migration Script
  *
- * 1. Logs all existing fragment OwnedCard rows grouped by user to fragments.log
- * 2. Seeds the FragmentBalance model with each user's count
- * 3. Deletes all fragment OwnedCard rows
+ * Refactored to be callable both as a standalone script (npx ts-node) and
+ * as an import from deckmafia.ts for auto‑migration on startup.
  *
- * Run before deploying the new /craft and /fragments code:
- *   npx ts-node src/migrateFragments.ts
+ * TODO: DELETE THIS FILE AFTER THE MIGRATION HAS RUN ONCE AND ALL USERS
+ *       HAVE BEEN MIGRATED TO THE FragmentBalance MODEL.
  */
 
 import 'dotenv/config';
@@ -14,17 +13,21 @@ import { appendFileSync } from 'fs';
 import { PrismaClient } from '@prisma/client';
 
 const LOG_FILE = '/home/botdev/rands/fragments.log';
-const prisma = new PrismaClient();
 
-function log(msg: string) {
+function logLine(line: string) {
 	const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
-	const line = `[${timestamp}] ${msg}`;
-	console.log(line);
-	appendFileSync(LOG_FILE, line + '\n');
+	const msg = `[${timestamp}] ${line}`;
+	console.log(msg);
+	appendFileSync(LOG_FILE, msg + '\n');
 }
 
-async function main() {
-	log('=== FRAGMENT MIGRATION STARTED ===');
+/**
+ * Run the fragment migration.
+ * @param prisma – an already‑connected PrismaClient instance
+ * @returns true if any rows were migrated, false if there was nothing to do
+ */
+export async function migrateFragments(prisma: PrismaClient): Promise<boolean> {
+	logLine('=== FRAGMENT MIGRATION STARTED ===');
 
 	// 1. Find the fragment card template
 	const fragmentCard = await prisma.card.findFirst({
@@ -33,13 +36,12 @@ async function main() {
 	});
 
 	if (!fragmentCard) {
-		log('No fragment card found in database. Nothing to migrate.');
-		log('=== FRAGMENT MIGRATION COMPLETE (no action taken) ===');
-		await prisma.$disconnect();
-		return;
+		logLine('No fragment card found in database. Nothing to migrate.');
+		logLine('=== FRAGMENT MIGRATION COMPLETE (no action taken) ===');
+		return false;
 	}
 
-	log(`Fragment card ID: ${fragmentCard.id}`);
+	logLine(`Fragment card ID: ${fragmentCard.id}`);
 
 	// 2. Group all fragment OwnedCards by inventoryId and count them
 	const fragmentGroups = await prisma.ownedCard.groupBy({
@@ -50,18 +52,19 @@ async function main() {
 	});
 
 	const totalFragmentRows = fragmentGroups.reduce((sum, g) => sum + g._count.id, 0);
-	log(`Found ${totalFragmentRows} fragment OwnedCard rows across ${fragmentGroups.length} user(s).`);
+	logLine(
+		`Found ${totalFragmentRows} fragment OwnedCard rows across ${fragmentGroups.length} user(s).`,
+	);
 
 	if (fragmentGroups.length === 0) {
-		log('No users have fragment cards. Nothing to migrate.');
-		log('=== FRAGMENT MIGRATION COMPLETE (no action taken) ===');
-		await prisma.$disconnect();
-		return;
+		logLine('No users have fragment cards. Nothing to migrate.');
+		logLine('=== FRAGMENT MIGRATION COMPLETE (no action taken) ===');
+		return false;
 	}
 
 	// 3. Resolve each inventory to a discordId and log the full list BEFORE modifying anything
-	log('');
-	log('--- USER FRAGMENT INVENTORY (backup log) ---');
+	logLine('');
+	logLine('--- USER FRAGMENT INVENTORY (backup log) ---');
 
 	const userFragments: { discordId: string; amount: number }[] = [];
 
@@ -72,24 +75,26 @@ async function main() {
 		});
 
 		if (!inventory) {
-			log(`WARNING: Inventory ${group.inventoryId} has ${group._count.id} fragments but no longer exists. Skipping.`);
+			logLine(
+				`WARNING: Inventory ${group.inventoryId} has ${group._count.id} fragments but no longer exists. Skipping.`,
+			);
 			continue;
 		}
 
-		log(`  discordId: ${inventory.discordId} | fragments: ${group._count.id}`);
+		logLine(`  discordId: ${inventory.discordId} | fragments: ${group._count.id}`);
 		userFragments.push({
 			discordId: inventory.discordId,
 			amount: group._count.id,
 		});
 	}
 
-	log('');
-	log(`Total users to migrate: ${userFragments.length}`);
-	log('--- END BACKUP LOG ---');
-	log('');
+	logLine('');
+	logLine(`Total users to migrate: ${userFragments.length}`);
+	logLine('--- END BACKUP LOG ---');
+	logLine('');
 
 	// 4. Seed FragmentBalance for each user
-	log('Seeding FragmentBalance records...');
+	logLine('Seeding FragmentBalance records...');
 	let created = 0;
 	let updated = 0;
 
@@ -107,44 +112,51 @@ async function main() {
 
 		if (existing) {
 			updated++;
-			log(`  UPDATED ${user.discordId}: set to ${user.amount} fragments`);
+			logLine(`  UPDATED ${user.discordId}: set to ${user.amount} fragments`);
 		} else {
 			created++;
-			log(`  CREATED ${user.discordId}: ${user.amount} fragments`);
+			logLine(`  CREATED ${user.discordId}: ${user.amount} fragments`);
 		}
 	}
 
-	log(`FragmentBalance seeded: ${created} created, ${updated} updated.`);
+	logLine(`FragmentBalance seeded: ${created} created, ${updated} updated.`);
 
 	// 5. Delete all fragment OwnedCard rows
-	log('');
-	log(`Deleting ${totalFragmentRows} fragment OwnedCard rows...`);
+	logLine('');
+	logLine(`Deleting ${totalFragmentRows} fragment OwnedCard rows...`);
 
 	const deleteResult = await prisma.ownedCard.deleteMany({
 		where: { cardId: fragmentCard.id },
 	});
 
-	log(`Deleted ${deleteResult.count} fragment OwnedCard rows.`);
+	logLine(`Deleted ${deleteResult.count} fragment OwnedCard rows.`);
 
 	// 6. Verify
 	const remaining = await prisma.ownedCard.count({
 		where: { cardId: fragmentCard.id },
 	});
 	if (remaining > 0) {
-		log(`WARNING: ${remaining} fragment OwnedCard rows still remain!`);
+		logLine(`WARNING: ${remaining} fragment OwnedCard rows still remain!`);
 	} else {
-		log('Verified: 0 fragment OwnedCard rows remaining.');
+		logLine('Verified: 0 fragment OwnedCard rows remaining.');
 	}
 
-	log('');
-	log('=== FRAGMENT MIGRATION COMPLETE ===');
-	log(`Log saved to: ${LOG_FILE}`);
+	logLine('');
+	logLine('=== FRAGMENT MIGRATION COMPLETE ===');
+	logLine(`Log saved to: ${LOG_FILE}`);
 
-	await prisma.$disconnect();
+	return true;
 }
 
-main().catch(async (err) => {
-	console.error('Migrating fragments failed:', err);
-	await prisma.$disconnect();
-	process.exit(1);
-});
+// ---- Standalone execution (npx ts-node src/migrateFragments.ts) ----
+if (require.main === module) {
+	const prisma = new PrismaClient();
+
+	migrateFragments(prisma)
+		.then(() => prisma.$disconnect())
+		.catch(async (err) => {
+			console.error('Migrating fragments failed:', err);
+			await prisma.$disconnect();
+			process.exit(1);
+		});
+}

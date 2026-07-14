@@ -6,6 +6,8 @@ import config from '../config';
 import { checkForRegularVoteCount, checkOnClose } from '../deckmafia/util/onTick';
 import { calculateVoteCount, createVoteCountPost } from '../deckmafia/util/voteCount';
 import { loadCommands, deckMafiaCommands } from '../structures/SlashCommand';
+// TODO: DELETE AFTER MIGRATION – remove the import and the migration block in ClientReady
+import { migrateFragments } from '../migrateFragments';
 
 let tickCounter = 0;
 let dbErrorUntil = 0;
@@ -31,7 +33,20 @@ client.on(Events.ClientReady, async (c) => {
     } catch (err) {
         console.error("Failed to prime member cache:", err);
     }
-	
+
+	// TODO: DELETE AFTER MIGRATION – this block migrates old fragment OwnedCard rows to FragmentBalance
+	try {
+		const migrated = await migrateFragments(prisma as any);
+		if (migrated) {
+			console.log('Fragment migration completed. You can now remove the migration block from deckmafia.ts and delete src/migrateFragments.ts.');
+		} else {
+			console.log('Fragment migration: nothing to migrate (already done or no fragments exist).');
+		}
+	} catch (migErr) {
+		console.error('Fragment migration failed:', migErr);
+	}
+	// END TODO: DELETE AFTER MIGRATION
+
 	const commandsPath = path.join(__dirname, '..', 'deckmafia', 'commands');
 	await loadCommands(client, commandsPath, deckMafiaRest, config.discordBotClientId, deckMafiaCommands);
 

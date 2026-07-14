@@ -10,7 +10,7 @@ const c = new SlashCommandBuilder();
 c.setName('godview');
 c.setDescription('View any card');
 c.addStringOption((o) => o.setName('name').setDescription('Name of the card').setRequired(true));
-c.addBooleanOption((i) => i.setName('hidden').setDescription('Do you wanna make this only visible to you? Default is no').setRequired(true));
+c.addBooleanOption((i) => i.setName('hidden').setDescription('Do you wanna make this only visible to you? Default is no').setRequired(false));
 
 async function getAllCardNames() {
 	const cards = await prisma.card.findMany({});
@@ -51,7 +51,7 @@ export default newSlashCommand({
 	data: c,
 	async execute(i: ChatInputCommandInteraction) {
 		const cardName = i.options.get('name', true).value as string;
-		const ephemeral = i.options.get('hidden', true).value as boolean;
+		const ephemeral = (i.options.get('hidden')?.value as boolean) ?? false;
 		try {
 			const fetchedCard = await prisma.card.findFirst({
 				where: {

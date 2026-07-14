@@ -1,4 +1,4 @@
-import { Client, Events, GatewayIntentBits, REST } from 'discord.js';
+import { Client, Events, GatewayIntentBits, REST, Routes } from 'discord.js';
 import { MessageFlags } from "discord.js";
 import path, { join } from 'path';
 import { database, prisma } from '..';
@@ -8,6 +8,8 @@ import { calculateVoteCount, createVoteCountPost } from '../deckmafia/util/voteC
 import { loadCommands, deckMafiaCommands } from '../structures/SlashCommand';
 
 let tickCounter = 0;
+let dbErrorUntil = 0;
+let lastDbErrorLog = 0;
 
 export const client = new Client({
 	intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
@@ -32,6 +34,7 @@ client.on(Events.ClientReady, async (c) => {
 	
 	const commandsPath = path.join(__dirname, '..', 'deckmafia', 'commands');
 	await loadCommands(client, commandsPath, deckMafiaRest, config.discordBotClientId, deckMafiaCommands);
+
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -195,7 +198,35 @@ async function tick(client: Client) {
         }
     }
 
-    const activeVoteCounts = await database.voteCount.findMany({ where: { active: true } });
+    // ==================== DB ERROR BACKOFF ====================
+    if (dbErrorUntil > 0) {
+        if (Date.now() < dbErrorUntil) {
+            // Throttle logging: only log every 5 minutes while waiting
+            if (Date.now() - lastDbErrorLog > 300_000) {
+                console.warn(`[TICK] DB unavailable, next retry in ~${Math.ceil((dbErrorUntil - Date.now()) / 1000)}s`);
+                lastDbErrorLog = Date.now();
+            }
+            return;
+        }
+        // Backoff expired, reset and try again
+        dbErrorUntil = 0;
+    }
+
+    let activeVoteCounts;
+    try {
+        activeVoteCounts = await database.voteCount.findMany({ where: { active: true } });
+    } catch (err: any) {
+        const isDbError = err?.code === 'P2010' || err?.message?.includes('timed out') || err?.message?.includes('Server selection timeout');
+        if (isDbError) {
+            const backoffMs = 60_000; // 60 second backoff
+            dbErrorUntil = Date.now() + backoffMs;
+            lastDbErrorLog = Date.now();
+            console.error(`[TICK] Database unavailable (code: ${err?.code || 'unknown'}): ${err?.message?.slice(0, 200) || err}. Backing off for ${backoffMs / 1000}s.`);
+        } else {
+            console.error('[TICK ERROR]', err);
+        }
+        return;
+    }
 
     if (activeVoteCounts.length === 0) return;
 

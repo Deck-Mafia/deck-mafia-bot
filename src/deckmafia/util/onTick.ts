@@ -19,14 +19,20 @@ export async function checkOnClose({ guild, voteCount }: OnTickProps): Promise<u
 		const expectedTimeMillis = closeAt.getTime();
 
 		if (currentTimeMillis > expectedTimeMillis) {
-			await database.voteCount.update({
-				where: {
-					id,
-				},
-				data: {
-					active: false,
-				},
-			});
+			try {
+				await database.voteCount.update({
+					where: {
+						id,
+					},
+					data: {
+						active: false,
+					},
+				});
+			} catch (dbErr: any) {
+				// DB unavailable — skip this tick, will retry next time
+				console.error(`[checkOnClose] DB error deactivating VoteCount ${id}:`, dbErr?.message || dbErr);
+				return;
+			}
 
 			try {
 				if (!channel.isTextBased()) throw Error();

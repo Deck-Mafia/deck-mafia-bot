@@ -4,7 +4,7 @@ import { ChannelType, ChatInputCommandInteraction, CommandInteraction, EmbedBuil
 import { MessageFlags } from "discord.js";
 import { database, prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
-import { checkGameInCategory, checkVoteCountInChannel, createGame, createNewEvent, createPlayer, calculateVoteCount, createVoteCountPost, getNextInterval } from '../util/voteCount';
+import { checkGameInCategory, checkVoteCountInChannel, createGame, createNewEvent, createPlayer, calculateVoteCount, createVoteCountPost, getNextInterval, triggerEndOfDay } from '../util/voteCount';
 
 
 const c = new SlashCommandBuilder();
@@ -121,22 +121,28 @@ async function manageVoteCount(i: ChatInputCommandInteraction) {
 
         // 2. Handle the "Post Now" logic if requested
         if (shouldPost) {
-            const channel = i.channel as TextChannel;
             const data = await calculateVoteCount(voteCounter.id, i.guild);
             
-            if (data && channel && typeof channel.send === 'function') {
-                const embed = await createVoteCountPost(data, i.guild);
-                await channel.send({ embeds: [embed] });
-
-                // Reset the timer since we just posted
-                await database.voteCount.update({
-                    where: { id: voteCounter.id },
-                    data: { lastPeriod: getNextInterval() },
-                });
-                
-                responseMessage += ' Vote count posted and timer reset.';
+            if (data) {
+                if (data.hammered) {
+                    await triggerEndOfDay(i.guild, data.voteCounter, data);
+                    responseMessage += ' Vote triggered majority — day ended.';
+                } else {
+                    const channel = i.channel as TextChannel;
+                    if (channel && typeof channel.send === 'function') {
+                        const embed = await createVoteCountPost(data, i.guild);
+                        await channel.send({ embeds: [embed] });
+                        await database.voteCount.update({
+                            where: { id: voteCounter.id },
+                            data: { lastPeriod: getNextInterval() },
+                        });
+                        responseMessage += ' Vote count posted and timer reset.';
+                    } else {
+                        responseMessage += ' Failed to post vote count (check permissions).';
+                    }
+                }
             } else {
-                responseMessage += ' Failed to post vote count (check permissions).';
+                responseMessage += ' Failed to calculate vote count.';
             }
         }
 

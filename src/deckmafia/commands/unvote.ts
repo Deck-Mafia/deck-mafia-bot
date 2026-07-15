@@ -14,6 +14,9 @@ const c = new SlashCommandBuilder();
 c.setName('unvote');
 c.setDescription('Remove your vote from a player in a game');
 
+// DISABLED — /vote unvote:true is the canonical unvote path; this standalone command was broken (never removed players from wagons).
+export default null;
+/*
 export default newSlashCommand({
     data: c,
     async execute(i: ChatInputCommandInteraction) {
@@ -69,3 +72,4 @@ export default newSlashCommand({
         }
     },
 });
+*/

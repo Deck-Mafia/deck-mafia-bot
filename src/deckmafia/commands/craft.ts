@@ -78,6 +78,18 @@ export default newSlashCommand({
 			});
 		}
 
+		// Fast-path: bail early if clearly insufficient (avoids transaction overhead)
+		const balance = await prisma.fragmentBalance.findUnique({
+			where: { discordId: targetUserId },
+			select: { amount: true },
+		});
+		const currentAmount = balance?.amount ?? 0;
+		if (currentAmount < requiredFragments) {
+			return i.editReply({
+				content: `You don't have enough Fragments. You need **${requiredFragments}** Fragments to craft a ${rarity}★ card, but you only have **${currentAmount}**.`,
+			});
+		}
+
 		// 2+3. Atomically deduct fragments AND add the card in a transaction.
 		// If either step fails, the entire operation is rolled back — no fragment loss.
 		try {

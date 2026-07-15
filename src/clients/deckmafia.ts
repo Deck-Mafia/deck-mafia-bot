@@ -6,6 +6,8 @@ import config from '../config';
 import { checkForRegularVoteCount, checkOnClose } from '../deckmafia/util/onTick';
 import { calculateVoteCount, createVoteCountPost } from '../deckmafia/util/voteCount';
 import { loadCommands, deckMafiaCommands } from '../structures/SlashCommand';
+import { tickTurboGames } from '../deckmafia/turbo/tick';
+import { TURBO_GUILD_ID } from '../deckmafia/turbo/constants';
 
 let tickCounter = 0;
 let dbErrorUntil = 0;
@@ -228,7 +230,17 @@ async function tick(client: Client) {
         return;
     }
 
-    if (activeVoteCounts.length === 0) return;
+    // Process vote counts even if there are none (turbo games may still need processing)
+    // Only skip if there are truly no vote counts
+    if (activeVoteCounts.length === 0) {
+        // Even without vote counts, turbo games may need processing
+        try {
+            await tickTurboGames(client);
+        } catch (err) {
+            console.error('[TurboTick ERROR]', err);
+        }
+        return;
+    }
 
     //console.log(`[TICK] Processing ${activeVoteCounts.length} active vote counts`);
 
@@ -280,4 +292,11 @@ async function tick(client: Client) {
             console.error(`[TICK ERROR] VoteCount ${voteCount.id} failed:`, err);
         }
     } // End of For Loop
+
+    // Process turbo games regardless of vote count status
+    try {
+        await tickTurboGames(client);
+    } catch (err) {
+        console.error('[TurboTick ERROR]', err);
+    }
 }

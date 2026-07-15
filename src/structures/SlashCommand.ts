@@ -9,6 +9,7 @@ export const deiMilitesCommands: Collection<string, SlashCommand> = new Collecti
 export interface SlashCommand {
 	data: SlashCommandBuilder;
 	execute: (i: ChatInputCommandInteraction) => any | Promise<any>;
+	guildId?: string; // If set, command is only registered to this guild
 }
 
 export async function newSlashCommand(cmd: SlashCommand) {
@@ -44,14 +45,31 @@ export async function loadCommands(client: Client, commandsPath: string, rest: R
 	}
 
 	try {
-		const list: any[] = [];
+		// Separate guild-locked and global commands
+		const globalCommands: any[] = [];
+		const guildCommands: Map<string, any[]> = new Map();
+
 		commands.forEach((val) => {
-			list.push(val.data.toJSON());
+			if (val.guildId) {
+				const existing = guildCommands.get(val.guildId) || [];
+				existing.push(val.data.toJSON());
+				guildCommands.set(val.guildId, existing);
+			} else {
+				globalCommands.push(val.data.toJSON());
+			}
 		});
 
-		const data = (await rest.put(Routes.applicationCommands(clientId), { body: list })) as any;
+		// Register global commands
+		if (globalCommands.length > 0) {
+			const data = (await rest.put(Routes.applicationCommands(clientId), { body: globalCommands })) as any;
+			console.log(`Successfully reloaded ${data.length} global application (/) commands.`);
+		}
 
-		console.log(`Successfully reloaded ${data.length} application (/) commands.`);
+		// Register guild-locked commands
+		for (const [guildId, cmds] of guildCommands) {
+			const data = (await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: cmds })) as any;
+			console.log(`Successfully reloaded ${data.length} guild-locked commands for guild ${guildId}.`);
+		}
 	} catch (err) {
 		console.error(err);
 	}

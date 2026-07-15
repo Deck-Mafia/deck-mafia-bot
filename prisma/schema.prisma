@@ -249,4 +249,54 @@ model Item {
   deiMilitesGameId String             @db.ObjectId
 }
 
+// TURBO MAFIA
 
+model TurboGame {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  guildId        String
+  threadId       String
+  status         String   @default("SETUP") // SETUP | DAY | NIGHT | ENDED
+  playerCount    Int
+  dayNumber      Int      @default(0)
+  dayHours       Int      @default(24)
+  nightHours     Int      @default(24)
+  winner         String?                    // SUBVER | SIRENS
+  nightEndsAt    DateTime?
+  killTarget     String?                    // Factional kill (any Siren, last wins)
+  sirens         String[]                   // All Siren Discord IDs
+  sirenRoles     Json                       // { discordId: "Inex"|"Bombey"|"Isis" }
+  firstDeadSiren String?                    // For Isis inheritance
+  players        TurboPlayer[]
+  createdAt      DateTime @default(now())
+}
+
+model TurboPlayer {
+  id                       String   @id @default(auto()) @map("_id") @db.ObjectId
+  gameId                   String   @db.ObjectId
+  discordId                String
+  alignment                String   // SUBVER | SIREN
+  sirenRole                String?  // Inex | Bombey | Isis
+  isAlive                  Boolean  @default(true)
+
+  // One-shot cards (permanent, never reset)
+  activityCopUsed          Boolean  @default(false)
+  babysitterUsed           Boolean  @default(false)
+  victimUsed               Boolean  @default(false)
+  deathCurseUsed           Boolean  @default(false)
+
+  // Targets
+  activityCopTarget        String?
+  babysitterTarget         String?
+  victimTarget             String?
+  deathCurseTarget         String?
+
+  // Per-night gate (cleared at dawn)
+  actionSubmittedThisNight Boolean  @default(false)
+
+  // Death Curse mark (set when a Siren curses this player)
+  deathCurseMarkedBy       String?
+
+  game TurboGame @relation(fields: [gameId], references: [id])
+
+  @@unique([gameId, discordId])
+}

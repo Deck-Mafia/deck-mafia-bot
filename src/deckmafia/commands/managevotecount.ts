@@ -65,6 +65,14 @@ c.addSubcommand((x) =>
         .addIntegerOption((x) => x.setName('closeat').setDescription('Timestamp to lock thread, close VC at').setRequired(false))
 );
 
+c.addSubcommand((x) =>
+    x.setName('privateweight')
+        .setDescription('Set a hidden vote weight modifier on a player (only revealed at EoD)')
+        .addUserOption((x) => x.setName('player').setDescription('Player to set the hidden weight for').setRequired(true))
+        .addIntegerOption((x) => x.setName('weight').setDescription('Hidden vote modifier (+2, -1, 0, etc.)').setRequired(true))
+        .addChannelOption((x) => x.setName('channel').setDescription('Channel with the vote counter (defaults to this channel)').setRequired(false))
+);
+
 
 export default newSlashCommand({
 	data: c,
@@ -84,6 +92,8 @@ export default newSlashCommand({
                 return closeGame(i, closeChannel.id);
             case 'update':
                 return updateVoteCount(i);
+            case 'privateweight':
+                return setPrivateWeight(i);
 			default:
 				return;
 		}
@@ -272,6 +282,30 @@ async function closeGame(i: CommandInteraction, channelId: string) {
             content: "Could not find a vote count in that channel or a database error occurred.",
             flags: [MessageFlags.Ephemeral],
         });
+    }
+}
+
+async function setPrivateWeight(i: ChatInputCommandInteraction) {
+    if (!i.guild) return;
+    await i.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const targetChannel = i.options.getChannel('channel', false) ?? i.channel!;
+    const voteCounter = await checkVoteCountInChannel(targetChannel.id);
+    if (!voteCounter) return i.editReply(`Vote Counter does not exist in <#${targetChannel.id}>`);
+
+    const player = i.options.getUser('player', true);
+    const weight = i.options.getInteger('weight', true);
+
+    try {
+        await createNewEvent(voteCounter.id, {
+            playerId: player.id,
+            privateVoteWeight: weight,
+        });
+
+        await i.editReply(`Hidden vote weight for **${player.displayName}** set to \`${weight}\`.`);
+    } catch (err) {
+        console.error(err);
+        return i.editReply('An error occurred while setting the hidden weight.');
     }
 }
 

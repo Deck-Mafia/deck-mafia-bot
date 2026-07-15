@@ -50,7 +50,7 @@ export async function checkOnClose({ guild, voteCount }: OnTickProps): Promise<u
 
 			const vc = await calculateVoteCount(id, guild);
 			if (vc) {
-				const embed = await createVoteCountPost(vc, guild);
+				const embed = await createVoteCountPost(vc, guild, true);
 				if (channel.isTextBased()) channel.send({ content: 'Day has ended', embeds: [embed] });
 			}
 

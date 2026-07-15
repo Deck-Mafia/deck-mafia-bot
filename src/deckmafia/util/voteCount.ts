@@ -130,6 +130,7 @@ export type Event = {
   canBeVoted: boolean;
   countsForMajority: boolean;
   voteWeight: number;
+  privateVoteWeight?: number;
   isVotingFor: DiscordID | null;
   isUnvoting: boolean;
   createdAt: Date;
@@ -190,6 +191,7 @@ type VoteCountResponse = {
     mutable.canVote = focusEvent.canVote ?? mutable.canVote;
     mutable.countsForMajority = focusEvent.countsForMajority ?? mutable.countsForMajority;
     mutable.voteWeight = focusEvent.voteWeight ?? mutable.voteWeight;
+    mutable.privateVoteWeight = focusEvent.privateVoteWeight ?? mutable.privateVoteWeight;
 	
 	
 	// Ensure dead players are properly marked (important fix)
@@ -252,12 +254,23 @@ type VoteCountResponse = {
       for (const wagonKey in wagons) {
         let totalWeight = 0;
         for (const voter of wagons[wagonKey]) {
-          totalWeight += currentStats[voter]?.voteWeight ?? 1;
+          const stat = currentStats[voter];
+          if (stat) {
+            totalWeight += (stat.voteWeight ?? 1) + (stat.privateVoteWeight ?? 0);
+          } else {
+            totalWeight += 1;
+          }
         }
         if (totalWeight >= majority) majorityReached = true;
       }
 
-      if (majorityReached) return { wagons, playerStats: currentStats, voteCounter };
+      if (majorityReached) {
+        await database.voteCount.update({
+          where: { id: voteCounter.id },
+          data: { closeAt: new Date(), hammered: true },
+        });
+        return { wagons, playerStats: currentStats, voteCounter };
+      }
     }
   }
   const finalWagons: Record<DiscordID, DiscordID[]> = {};
@@ -275,7 +288,8 @@ type VoteCountResponse = {
 
 export async function createVoteCountPost(
   voteCount: VoteCountResponse,
-  guild: Guild
+  guild: Guild,
+  isFinal: boolean = false,
 ) {
   const { wagons, playerStats, voteCounter } = voteCount;
 
@@ -365,10 +379,23 @@ if (userIdsToFetch.length > 0) {
     }
 	const wagonTop = targetMember?.displayName || `<@${wagonKey}>`;
 	const voterNames = wagon.map(id => guild.members.cache.get(id)?.displayName || `<@${id}>`);
-  
-	if (wagon.length > 0) {
-		wagonLines.push(`**${wagonTop} (${wagon.length})** - ${voterNames.join(", ")}`);
-    }
+
+		if (wagon.length > 0) {
+			// Compute weighted total — public weights always count, private only at EoD
+			let weightedCount = 0;
+			for (const voterId of wagon) {
+				const stat = playerStats[voterId];
+				if (stat) {
+					weightedCount += (stat.voteWeight ?? 1);
+					if (isFinal) {
+						weightedCount += (stat.privateVoteWeight ?? 0);
+					}
+				} else {
+					weightedCount += 1;
+				}
+			}
+			wagonLines.push(`**${wagonTop} (${weightedCount})** - ${voterNames.join(", ")}`);
+		}
   }
   
 
@@ -460,6 +487,7 @@ export async function createNewEvent(voteCountId: string, event: EventPartial) {
     countsForMajority,
     playerId,
     voteWeight,
+    privateVoteWeight,
     isVotingFor,
     isUnvoting,
     createdAt,
@@ -488,6 +516,7 @@ export async function createNewEvent(voteCountId: string, event: EventPartial) {
         canVote: canVote ?? undefined,
         isVotingFor: isVotingFor ?? undefined,
         voteWeight: voteWeight ?? undefined,
+        privateVoteWeight: privateVoteWeight ?? undefined,
         countsForMajority: countsForMajority ?? undefined,
         isUnvoting: isUnvoting ?? undefined,
         createdAt: createdAt ? new Date(createdAt) : undefined,

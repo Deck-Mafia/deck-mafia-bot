@@ -15,7 +15,7 @@ export default newSlashCommand({
 	data: c,
 	async execute(i: ChatInputCommandInteraction) {
 		const name = i.options.get('name', true).value as string;
-		const url = i.options.get('url', true).value as string;
+		const url = (i.options.get('url', true).value as string).split('?')[0];
 		const rarity = i.options.get('rarity', true).value as number;
 		const publicOption = i.options.get('public', false);
 		const isPublic = publicOption ? (publicOption.value as boolean) : false;

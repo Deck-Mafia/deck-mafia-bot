@@ -49,8 +49,8 @@ c.addSubcommand((x) =>
 
 c.addSubcommand((x) =>
     x.setName('close')
-        .setDescription('Deactivate a specific vote count by ID')
-        .addStringOption(x => x.setName('id').setDescription('The ID from the /list command').setRequired(true))
+        .setDescription('Deactivate a vote counter')
+        .addChannelOption(x => x.setName('channel').setDescription('Channel with the vote counter (defaults to this channel)').setRequired(false))
 );
 
 c.addSubcommand((x) =>
@@ -80,8 +80,8 @@ export default newSlashCommand({
 			case 'list':
                 return listActiveGames(i); 
             case 'close':
-                const id = i.options.getString('id', true);
-                return closeGame(i, id);
+                const closeChannel = i.options.getChannel('channel', false) ?? i.channel!;
+                return closeGame(i, closeChannel.id);
             case 'update':
                 return updateVoteCount(i);
 			default:
@@ -239,27 +239,38 @@ async function listActiveGames(i: CommandInteraction) {
     embed.setDescription(list || "No games found.");
     await i.reply({ embeds: [embed], flags: [MessageFlags.Ephemeral] });
 }
-async function closeGame(i: CommandInteraction, voteCountId: string) {
+async function closeGame(i: CommandInteraction, channelId: string) {
     try {
+        const voteCounter = await database.voteCount.findUnique({
+            where: { channelId },
+        });
+
+        if (!voteCounter) {
+            return i.reply({
+                content: `No vote counter found in <#${channelId}>.`,
+                flags: [MessageFlags.Ephemeral],
+            });
+        }
+
         // 1. Delete all ActionEvents first (to avoid the relation error)
         await database.actionEvent.deleteMany({
-            where: { voteCountId: voteCountId }
+            where: { voteCountId: voteCounter.id },
         });
 
         // 2. Now delete the VoteCount record itself
         await database.voteCount.delete({
-            where: { id: voteCountId }
+            where: { id: voteCounter.id },
         });
 
-        await i.reply({ 
-            content: `Successfully DELETED vote count \`${voteCountId}\` and all its history. You can now create a new one.`, 
-            flags: [MessageFlags.Ephemeral] 
+        await i.reply({
+            content: `Successfully DELETED vote count in <#${channelId}> and all its history. You can now create a new one.`,
+            flags: [MessageFlags.Ephemeral],
         });
     } catch (err) {
         console.error(err);
-        await i.reply({ 
-            content: "Could not find a vote count with that ID or a database error occurred.", 
-            flags: [MessageFlags.Ephemeral] 
+        await i.reply({
+            content: "Could not find a vote count in that channel or a database error occurred.",
+            flags: [MessageFlags.Ephemeral],
         });
     }
 }

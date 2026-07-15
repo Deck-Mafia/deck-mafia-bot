@@ -54,9 +54,12 @@ export async function checkOnClose({ guild, voteCount }: OnTickProps): Promise<u
 				if (channel.isTextBased()) channel.send({ content: 'Day has ended', embeds: [embed] });
 			}
 
-			// Clean up all ActionEvents now that the final vote count has posted
+			// Clean up all ActionEvents and the VoteCount itself so the channel is free for a new counter
 			await database.actionEvent.deleteMany({
 				where: { voteCountId: id },
+			});
+			await database.voteCount.delete({
+				where: { id },
 			});
 		}
 	}

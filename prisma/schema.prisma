@@ -64,17 +64,18 @@ model VoteCount {
 }
 
 model ActionEvent {
-  id                String    @id @default(auto()) @map("_id") @db.ObjectId
-  playerId          String
-  voteCountId       String    @db.ObjectId
-  voteCount         VoteCount @relation(fields: [voteCountId], references: [id])
-  canVote           Boolean?
-  canBeVoted        Boolean?
-  countsForMajority Boolean?
-  voteWeight        Int?
-  isVotingFor       String?
-  isUnvoting        Boolean?
-  createdAt         DateTime  @default(now())
+  id                 String    @id @default(auto()) @map("_id") @db.ObjectId
+  playerId           String
+  voteCountId        String    @db.ObjectId
+  voteCount          VoteCount @relation(fields: [voteCountId], references: [id])
+  canVote            Boolean?
+  canBeVoted         Boolean?
+  countsForMajority  Boolean?
+  voteWeight         Int?
+  privateVoteWeight  Int?
+  isVotingFor        String?
+  isUnvoting         Boolean?
+  createdAt          DateTime  @default(now())
 }
 
 // DECK MAFIA

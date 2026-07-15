@@ -4,7 +4,7 @@ import { ChannelType, ChatInputCommandInteraction, CommandInteraction, EmbedBuil
 import { MessageFlags } from "discord.js";
 import { database, prisma } from '../..';
 import { newSlashCommand, SlashCommand } from '../../structures/SlashCommand';
-import { checkGameInCategory, checkVoteCountInChannel, createGame, createNewEvent, createPlayer, calculateVoteCount, createVoteCountPost, getNextInterval } from '../util/voteCount';
+import { checkGameInCategory, checkVoteCountInChannel, createGame, createNewEvent, createPlayer, calculateVoteCount, createVoteCountPost, getNextInterval, triggerEndOfDay } from '../util/voteCount';
 
 
 const c = new SlashCommandBuilder();
@@ -25,6 +25,7 @@ c.addSubcommand((x) =>
 	x
 		.setName('event')
 		.setDescription('Add a new event to the game. Ignore any values to keep them the same')
+		.addChannelOption((x) => x.setName('channel').setDescription('Channel with the vote counter (defaults to this channel)').setRequired(false))
 		.addUserOption((x) => x.setName('player').setDescription('Player you are updating a value for').setRequired(true))
 		.addIntegerOption((x) => x.setName('timestamp').setDescription('EPOCH timestamp in seconds. Defaults to now').setRequired(false))
 		.addBooleanOption((x) => x.setName('vote').setDescription('Can this player vote?').setRequired(false))
@@ -32,7 +33,8 @@ c.addSubcommand((x) =>
 		.addBooleanOption((x) => x.setName('majority').setDescription('Does this player count towards majority').setRequired(false))
 		.addIntegerOption((x) => x.setName('weight').setDescription('What is the vote weight this player has?').setRequired(false))
 		.addUserOption((x) => x.setName('voting').setDescription('Who is this player voting for?').setRequired(false))
-		.addUserOption((x) => x.setName('unvote').setDescription('Remove the vote from a player.').setRequired(false))
+		.addBooleanOption((x) => x.setName('unvote').setDescription('Remove the vote from a player.').setRequired(false))
+		.addIntegerOption((x) => x.setName('privateweight').setDescription('Hidden vote modifier (only revealed at EoD)').setRequired(false))
 );
 
 c.addSubcommand((x) =>
@@ -49,9 +51,22 @@ c.addSubcommand((x) =>
 
 c.addSubcommand((x) =>
     x.setName('close')
-        .setDescription('Deactivate a specific vote count by ID')
-        .addStringOption(x => x.setName('id').setDescription('The ID from the /list command').setRequired(true))
+        .setDescription('Deactivate a vote counter')
+        .addChannelOption(x => x.setName('channel').setDescription('Channel with the vote counter (defaults to this channel)').setRequired(false))
 );
+
+c.addSubcommand((x) =>
+    x.setName('update')
+        .setDescription('Update a vote counter')
+        .addChannelOption((x) => x.setName('channel').setDescription('Channel with the vote counter (defaults to this channel)').setRequired(false))
+        .addRoleOption((x) => x.setName('alive').setDescription('Role which they have when alive').setRequired(false))
+        .addBooleanOption((x) => x.setName('majority').setDescription('Enable majority').setRequired(false))
+        .addBooleanOption((x) => x.setName('plurality').setDescription('Enable plurality').setRequired(false))
+        .addBooleanOption((x) => x.setName('locked').setDescription('Lock votes. Votes cannot be changed once they have been made').setRequired(false))
+        .addBooleanOption((x) => x.setName('hammered').setDescription('Force hammer state').setRequired(false))
+        .addIntegerOption((x) => x.setName('closeat').setDescription('Timestamp to lock thread, close VC at').setRequired(false))
+);
+
 
 
 export default newSlashCommand({
@@ -68,8 +83,10 @@ export default newSlashCommand({
 			case 'list':
                 return listActiveGames(i); 
             case 'close':
-                const id = i.options.getString('id', true);
-                return closeGame(i, id);   
+                const closeChannel = i.options.getChannel('channel', false) ?? i.channel!;
+                return closeGame(i, closeChannel.id);
+            case 'update':
+                return updateVoteCount(i);
 			default:
 				return;
 		}
@@ -97,22 +114,28 @@ async function manageVoteCount(i: ChatInputCommandInteraction) {
 
         // 2. Handle the "Post Now" logic if requested
         if (shouldPost) {
-            const channel = i.channel as TextChannel;
             const data = await calculateVoteCount(voteCounter.id, i.guild);
             
-            if (data && channel && typeof channel.send === 'function') {
-                const embed = await createVoteCountPost(data, i.guild);
-                await channel.send({ embeds: [embed] });
-
-                // Reset the timer since we just posted
-                await database.voteCount.update({
-                    where: { id: voteCounter.id },
-                    data: { lastPeriod: getNextInterval() },
-                });
-                
-                responseMessage += ' Vote count posted and timer reset.';
+            if (data) {
+                if (data.hammered) {
+                    await triggerEndOfDay(i.guild, data.voteCounter, data);
+                    responseMessage += ' Vote triggered majority — day ended.';
+                } else {
+                    const channel = i.channel as TextChannel;
+                    if (channel && typeof channel.send === 'function') {
+                        const embed = await createVoteCountPost(data, i.guild);
+                        await channel.send({ embeds: [embed] });
+                        await database.voteCount.update({
+                            where: { id: voteCounter.id },
+                            data: { lastPeriod: getNextInterval() },
+                        });
+                        responseMessage += ' Vote count posted and timer reset.';
+                    } else {
+                        responseMessage += ' Failed to post vote count (check permissions).';
+                    }
+                }
             } else {
-                responseMessage += ' Failed to post vote count (check permissions).';
+                responseMessage += ' Failed to calculate vote count.';
             }
         }
 
@@ -128,6 +151,7 @@ async function createEvent(i: ChatInputCommandInteraction) {
 	if (!i.guild) return;
 	await i.deferReply({ flags: MessageFlags.Ephemeral });
 
+	const targetChannel = i.options.getChannel('channel', false) ?? i.channel!;
 	const player = i.options.getUser('player', true);
 	const timestamp = i.options.getInteger('timestamp', false) ?? undefined;
 	const convertedTimestamp = timestamp ? new Date(timestamp * 1000) : undefined;
@@ -136,11 +160,12 @@ async function createEvent(i: ChatInputCommandInteraction) {
 	const countsForMajority = i.options.getBoolean('majority', false) ?? undefined;
 	const isUnvoting = i.options.getBoolean('unvote', false) ?? undefined;
 	const voteWeight = i.options.getInteger('weight', false) ?? undefined;
+	const privateVoteWeight = i.options.getInteger('privateweight', false) ?? undefined;
 	const votingPlayer = i.options.getUser('voting', false) ?? undefined;
 
 	try {
-		const voteCounter = await checkVoteCountInChannel(i.channelId);
-		if (!voteCounter) return i.editReply('Vote Counter does not exist in this channel');
+		const voteCounter = await checkVoteCountInChannel(targetChannel.id);
+		if (!voteCounter) return i.editReply(`Vote Counter does not exist in <#${targetChannel.id}>`);
 
 		const newEvent = await createNewEvent(voteCounter.id, {
 			playerId: player.id,
@@ -149,6 +174,7 @@ async function createEvent(i: ChatInputCommandInteraction) {
 			canVote,
 			countsForMajority,
 			voteWeight,
+			privateVoteWeight,
 			isUnvoting,
 			isVotingFor: votingPlayer ? votingPlayer.id : null,
 		});
@@ -225,28 +251,88 @@ async function listActiveGames(i: CommandInteraction) {
     embed.setDescription(list || "No games found.");
     await i.reply({ embeds: [embed], flags: [MessageFlags.Ephemeral] });
 }
-async function closeGame(i: CommandInteraction, voteCountId: string) {
+async function closeGame(i: CommandInteraction, channelId: string) {
     try {
+        const voteCounter = await database.voteCount.findUnique({
+            where: { channelId },
+        });
+
+        if (!voteCounter) {
+            return i.reply({
+                content: `No vote counter found in <#${channelId}>.`,
+                flags: [MessageFlags.Ephemeral],
+            });
+        }
+
         // 1. Delete all ActionEvents first (to avoid the relation error)
         await database.actionEvent.deleteMany({
-            where: { voteCountId: voteCountId }
+            where: { voteCountId: voteCounter.id },
         });
 
         // 2. Now delete the VoteCount record itself
         await database.voteCount.delete({
-            where: { id: voteCountId }
+            where: { id: voteCounter.id },
         });
 
-        await i.reply({ 
-            content: `Successfully DELETED vote count \`${voteCountId}\` and all its history. You can now create a new one.`, 
-            flags: [MessageFlags.Ephemeral] 
+        await i.reply({
+            content: `Successfully DELETED vote count in <#${channelId}> and all its history. You can now create a new one.`,
+            flags: [MessageFlags.Ephemeral],
         });
     } catch (err) {
         console.error(err);
-        await i.reply({ 
-            content: "Could not find a vote count with that ID or a database error occurred.", 
-            flags: [MessageFlags.Ephemeral] 
+        await i.reply({
+            content: "Could not find a vote count in that channel or a database error occurred.",
+            flags: [MessageFlags.Ephemeral],
         });
+    }
+}
+
+async function updateVoteCount(i: ChatInputCommandInteraction) {
+    if (!i.guild) return;
+    await i.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const targetChannel = i.options.getChannel('channel', false) ?? i.channel!;
+    const voteCounter = await checkVoteCountInChannel(targetChannel.id);
+    if (!voteCounter) return i.editReply(`Vote Counter does not exist in <#${targetChannel.id}>`);
+
+    const aliveRole = i.options.getRole('alive', false);
+    const majority = i.options.getBoolean('majority', false);
+    const plurality = i.options.getBoolean('plurality', false);
+    const locked = i.options.getBoolean('locked', false);
+    const hammered = i.options.getBoolean('hammered', false);
+    const closeAtStamp = i.options.getInteger('closeat', false);
+
+    // Build update data from only the provided options
+    const updateData: Record<string, unknown> = {};
+
+    if (aliveRole) updateData.livingRoleId = aliveRole.id;
+    if (majority !== null) updateData.majority = majority;
+    if (plurality !== null) updateData.plurality = plurality;
+    if (locked !== null) updateData.lockedVotes = locked;
+    if (hammered !== null) updateData.hammered = hammered;
+    if (closeAtStamp !== null) {
+        updateData.closeAt = closeAtStamp ? new Date(closeAtStamp * 1000) : null;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+        return i.editReply('No options provided to update.');
+    }
+
+    try {
+        await database.voteCount.update({
+            where: { id: voteCounter.id },
+            data: updateData,
+        });
+
+        const changedFields = Object.keys(updateData)
+            .map(k => `\`${k}\``)
+            .join(', ');
+        await i.editReply(`Vote counter updated. Changed: ${changedFields}`);
+
+        if (closeAtStamp) await i.followUp(`**Day end <t:${closeAtStamp}:R>**`);
+    } catch (err) {
+        console.error(err);
+        return i.editReply('An error occurred while updating the vote counter.');
     }
 }
 

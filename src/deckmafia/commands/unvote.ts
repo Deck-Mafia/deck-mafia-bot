@@ -5,7 +5,8 @@ import {
     calculateVoteCount, 
     checkVoteCountInChannel, 
     createNewEvent, 
-    createVoteCountPost, 
+    createVoteCountPost,
+    triggerEndOfDay,
     EventPartial 
 } from '../util/voteCount';
 
@@ -13,6 +14,9 @@ const c = new SlashCommandBuilder();
 c.setName('unvote');
 c.setDescription('Remove your vote from a player in a game');
 
+// DISABLED — /vote unvote:true is the canonical unvote path; this standalone command was broken (never removed players from wagons).
+export default null;
+/*
 export default newSlashCommand({
     data: c,
     async execute(i: ChatInputCommandInteraction) {
@@ -49,13 +53,15 @@ export default newSlashCommand({
             const data = await calculateVoteCount(voteCounter.id, i.guild);
             if (!data) throw Error();
 
-            const voteCount = await createVoteCountPost(data, i.guild);
-            
-            // 4. Corrected flags syntax for followUp
-            await i.followUp({ 
-                embeds: [voteCount], 
-                flags: [MessageFlags.Ephemeral] 
-            });
+            if (data.hammered) {
+                await triggerEndOfDay(i.guild, data.voteCounter, data);
+            } else {
+                const voteCount = await createVoteCountPost(data, i.guild);
+                await i.followUp({ 
+                    embeds: [voteCount], 
+                    flags: [MessageFlags.Ephemeral] 
+                });
+            }
 
         } catch (err) {
             console.error(err);
@@ -66,3 +72,4 @@ export default newSlashCommand({
         }
     },
 });
+*/

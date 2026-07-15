@@ -1,7 +1,7 @@
 import { VoteCount } from '@prisma/client';
 import { Guild, PermissionsBitField, TextChannel } from 'discord.js';
 import { database } from '../..';
-import { calculateVoteCount, createVoteCountPost,getNextInterval } from './voteCount';
+import { calculateVoteCount, createVoteCountPost, getNextInterval, triggerEndOfDay } from './voteCount';
 
 export type OnTickProps = {
 	guild: Guild;
@@ -19,48 +19,10 @@ export async function checkOnClose({ guild, voteCount }: OnTickProps): Promise<u
 		const expectedTimeMillis = closeAt.getTime();
 
 		if (currentTimeMillis > expectedTimeMillis) {
-			try {
-				await database.voteCount.update({
-					where: {
-						id,
-					},
-					data: {
-						active: false,
-					},
-				});
-			} catch (dbErr: any) {
-				// DB unavailable — skip this tick, will retry next time
-				console.error(`[checkOnClose] DB error deactivating VoteCount ${id}:`, dbErr?.message || dbErr);
-				return;
-			}
-
-			try {
-				if (!channel.isTextBased()) throw Error();
-				else {
-					await (channel as TextChannel).permissionOverwrites.set([
-						{
-							id: voteCount.livingRoleId,
-							deny: [PermissionsBitField.Flags.SendMessages],
-						},
-					]);
-				}
-			} catch (err) {
-				if (channel.isTextBased()) channel.send('Failed to lock channel. Do not post');
-			}
-
 			const vc = await calculateVoteCount(id, guild);
 			if (vc) {
-				const embed = await createVoteCountPost(vc, guild, true);
-				if (channel.isTextBased()) channel.send({ content: 'Day has ended', embeds: [embed] });
+				await triggerEndOfDay(guild, voteCount, vc);
 			}
-
-			// Clean up all ActionEvents and the VoteCount itself so the channel is free for a new counter
-			await database.actionEvent.deleteMany({
-				where: { voteCountId: id },
-			});
-			await database.voteCount.delete({
-				where: { id },
-			});
 		}
 	}
 
@@ -87,14 +49,18 @@ export async function checkForRegularVoteCount({ guild, voteCount }: OnTickProps
 
             const vc = await calculateVoteCount(id, guild);
             if (vc) {
-                const embed = await createVoteCountPost(vc, guild);
-                await (channel as TextChannel).send({ embeds: [embed] });
-                
-                // ONLY update the timer if the message actually sent successfully
-                await database.voteCount.update({
-                    where: { id },
-                    data: { lastPeriod: new Date(currentTimeMillis + 1000 * 60 * 60 * 2) },
-                });
+                if (vc.hammered) {
+                    await triggerEndOfDay(guild, voteCount, vc);
+                } else {
+                    const embed = await createVoteCountPost(vc, guild);
+                    await (channel as TextChannel).send({ embeds: [embed] });
+                    
+                    // ONLY update the timer if the message actually sent successfully
+                    await database.voteCount.update({
+                        where: { id },
+                        data: { lastPeriod: new Date(currentTimeMillis + 1000 * 60 * 60 * 2) },
+                    });
+                }
             }
         } catch (err) {
             console.error('[RegularVoteCount ERROR]', err);

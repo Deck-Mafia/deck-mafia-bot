@@ -106,13 +106,8 @@ export async function processOpenPack(
 		return null;
 	}
 
-	// 2. Consume one booster pack
+	// 2. Fetch all pullable cards and group by rarity (read-only, outside transaction)
 	const boosterPack = inventory.ownedCards[0];
-	await prisma.ownedCard.delete({
-		where: { id: boosterPack.id },
-	});
-
-	// 3. Fetch all pullable cards and group by rarity
 	const allPullableCards = await prisma.card.findMany({
 		where: {
 			rarity: { in: PULLABLE_RARITIES },
@@ -129,7 +124,7 @@ export async function processOpenPack(
 		poolByRarity.get(r)!.push({ id: card.id, name: card.name, uri: card.uri });
 	}
 
-	// 4. Run the pack draw logic
+	// 3. Run the pack draw logic (RNG — no DB writes)
 	const standardSlots = extraSlot ? 4 : 3;
 	const drawnCards: DrawnCard[] = [];
 
@@ -145,39 +140,41 @@ export async function processOpenPack(
 		}
 	}
 
-	// 5. Add drawn cards to the target user's inventory (with refund on failure)
-	try {
-		for (const drawn of drawnCards) {
-			const fetchedCard = await prisma.card.findFirst({
-				where: { name: drawn.name },
-			});
+	// 4. Pre-resolve card IDs from names (so the transaction only does writes)
+	const drawnCardIds: { name: string; cardId: string }[] = [];
+	for (const drawn of drawnCards) {
+		const fetchedCard = await prisma.card.findFirst({
+			where: { name: drawn.name },
+			select: { id: true },
+		});
+		if (fetchedCard) {
+			drawnCardIds.push({ name: drawn.name, cardId: fetchedCard.id });
+		}
+	}
 
-			if (fetchedCard) {
-				await prisma.ownedCard.create({
-					data: {
-						card: {
-							connect: { id: fetchedCard.id },
-						},
-						inventory: {
-							connectOrCreate: {
-								where: { discordId: targetUserId },
-								create: { discordId: targetUserId },
-							},
+	// 5. Atomically consume the booster pack AND grant all drawn cards in one transaction.
+	//    If any write fails, the entire operation rolls back — no lost packs, no partial grants.
+	await prisma.$transaction(async (tx) => {
+		// Consume one booster pack
+		await tx.ownedCard.delete({
+			where: { id: boosterPack.id },
+		});
+
+		// Grant all drawn cards
+		for (const { cardId } of drawnCardIds) {
+			await tx.ownedCard.create({
+				data: {
+					card: { connect: { id: cardId } },
+					inventory: {
+						connectOrCreate: {
+							where: { discordId: targetUserId },
+							create: { discordId: targetUserId },
 						},
 					},
-				});
-			}
+				},
+			});
 		}
-	} catch (cardAddError) {
-		// Refund the booster pack
-		await prisma.ownedCard.create({
-			data: {
-				card: { connect: { id: boosterPack.cardId! } },
-				inventory: { connect: { id: boosterPack.inventoryId } },
-			},
-		});
-		throw cardAddError;
-	}
+	});
 
 	// 6. Log the pack opening to file
 	const rarityLabelsLog: Record<number, string> = {

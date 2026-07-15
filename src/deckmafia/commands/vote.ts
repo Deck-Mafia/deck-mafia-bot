@@ -6,6 +6,7 @@ import {
     checkVoteCountInChannel,
     createNewEvent,
     createVoteCountPost,
+    triggerEndOfDay,
     EventPartial,
 } from '../util/voteCount';
 
@@ -75,15 +76,17 @@ export default newSlashCommand({
             await i.editReply(successMessage);
 
             // 6. POST UPDATED EMBED (NON-BLOCKING)
-            // We don't necessarily need to "await" the final followUp to finish 
-            // the command, but on a Pi, it's safer to keep it sequential.
             const data = await calculateVoteCount(voteCounter.id, i.guild);
             if (data) {
-                const voteCountEmbed = await createVoteCountPost(data, i.guild);
-                await i.followUp({ 
-                    embeds: [voteCountEmbed], 
-                    flags: [MessageFlags.Ephemeral] 
-                });
+                if (data.hammered) {
+                    await triggerEndOfDay(i.guild, data.voteCounter, data);
+                } else {
+                    const voteCountEmbed = await createVoteCountPost(data, i.guild);
+                    await i.followUp({ 
+                        embeds: [voteCountEmbed], 
+                        flags: [MessageFlags.Ephemeral] 
+                    });
+                }
             }
 
         } catch (err) {

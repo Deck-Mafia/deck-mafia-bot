@@ -12,6 +12,12 @@ import { newSlashCommand } from "../../structures/SlashCommand";
 
 const cardsPerPage = 25;
 
+// Active window for the /peek pagination buttons (Discord caps message components at 15 min).
+const PEEK_ACTIVE_MS = Math.min(
+  parseInt(process.env.PEEK_ACTIVE_MS ?? '600000', 10) || 600000,
+  900000
+);
+
 const c = new SlashCommandBuilder();
 c.setName("peek");
 c.setDescription("See what cards a player has in their inventory.");
@@ -139,7 +145,7 @@ export default newSlashCommand({
             interaction.isButton() &&
             interaction.customId.startsWith("peek") &&
             interaction.user.id === i.user.id,
-          time: 60000,
+          time: PEEK_ACTIVE_MS,
         });
 
         collector?.on("collect", async (interaction) => {
@@ -234,7 +240,7 @@ export default newSlashCommand({
             interaction.isButton() &&
             interaction.customId.startsWith("peek") &&
             interaction.user.id === i.user.id,
-          time: 60000,
+          time: PEEK_ACTIVE_MS,
         });
 
         collector?.on("collect", async (interaction) => {

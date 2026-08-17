@@ -35,6 +35,19 @@ client.on(Events.ClientReady, async (c) => {
 	const commandsPath = path.join(__dirname, '..', 'deckmafia', 'commands');
 	await loadCommands(client, commandsPath, deckMafiaRest, config.discordBotClientId, deckMafiaCommands);
 
+	// Guild-scope ONLY /draw for instant availability in the game server.
+	// Global command registration can lag ~1 hour, so a targeted guild registration
+	// makes /draw usable immediately in the configured guild.
+	const drawScopeGuildId = config.drawScopeGuildId;
+	const drawCommand = deckMafiaCommands.get('draw');
+	if (drawCommand && drawScopeGuildId) {
+		await deckMafiaRest.put(
+			Routes.applicationGuildCommands(config.discordBotClientId, drawScopeGuildId),
+			{ body: [drawCommand.data.toJSON()] }
+		);
+		console.log(`Guild-scoped [/draw] to guild ${drawScopeGuildId}`);
+	}
+
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

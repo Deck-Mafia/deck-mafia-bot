@@ -5,6 +5,12 @@ import { newSlashCommand } from '../../structures/SlashCommand';
 
 const cardsPerPage = 25;
 
+// Active window for the /submit pagination buttons (Discord caps message components at 15 min).
+const SUBMIT_ACTIVE_MS = Math.min(
+	parseInt(process.env.SUBMIT_ACTIVE_MS ?? '600000', 10) || 600000,
+	900000
+);
+
 const c = new SlashCommandBuilder();
 c.setName('submit');
 c.setDescription('Submit any amount of cards that you own.');
@@ -62,7 +68,7 @@ export default newSlashCommand({
 
             const collector = i.channel?.createMessageComponentCollector({
                 filter: (interaction) => (interaction.isButton() && interaction.customId.startsWith('submit')) && interaction.user.id === i.user.id,
-                time: 60000,
+                time: SUBMIT_ACTIVE_MS,
             });
 
             collector?.on('collect', async (interaction) => {

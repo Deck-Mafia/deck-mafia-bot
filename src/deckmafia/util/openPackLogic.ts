@@ -17,7 +17,7 @@ const EXCLUDED_RARITIES = [-1, -99];
 const PULLABLE_RARITIES = [0, 3, 4, 5, 6];
 
 // Chance that a pack containing a named "Wished Card" actually pulls that card.
-const WISH_CHANCE = 1.0;
+const WISH_CHANCE = 0.3;
 
 export interface DrawnCard {
 	name: string;

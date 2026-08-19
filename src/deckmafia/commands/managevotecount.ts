@@ -25,8 +25,8 @@ c.addSubcommand((x) =>
 	x
 		.setName('event')
 		.setDescription('Add a new event to the game. Ignore any values to keep them the same')
-		.addChannelOption((x) => x.setName('channel').setDescription('Channel with the vote counter (defaults to this channel)').setRequired(false))
 		.addUserOption((x) => x.setName('player').setDescription('Player you are updating a value for').setRequired(true))
+		.addChannelOption((x) => x.setName('channel').setDescription('Channel with the vote counter (defaults to this channel)').setRequired(false))
 		.addIntegerOption((x) => x.setName('timestamp').setDescription('EPOCH timestamp in seconds. Defaults to now').setRequired(false))
 		.addBooleanOption((x) => x.setName('vote').setDescription('Can this player vote?').setRequired(false))
 		.addBooleanOption((x) => x.setName('recipient').setDescription('Can this user be voted?').setRequired(false))

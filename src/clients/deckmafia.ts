@@ -48,18 +48,6 @@ client.on(Events.ClientReady, async (c) => {
 		console.log(`Guild-scoped [/draw] to guild ${drawScopeGuildId}`);
 	}
 
-	// Guild-scope /adminopenpack to the main test server (serverMain) so its options
-	// (e.g. the Wished Card option) are usable immediately instead of waiting on global
-	// command propagation (up to ~1 hour). /adminopenpack is tested in serverMain.
-	const adminOpenPackCommand = deckMafiaCommands.get('adminopenpack');
-	if (adminOpenPackCommand && config.serverMain) {
-		await deckMafiaRest.put(
-			Routes.applicationGuildCommands(config.discordBotClientId, config.serverMain),
-			{ body: [adminOpenPackCommand.data.toJSON()] }
-		);
-		console.log(`Guild-scoped [/adminopenpack] to guild ${config.serverMain}`);
-	}
-
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

@@ -25,7 +25,7 @@ c.addBooleanOption((o) =>
 c.addStringOption((o) =>
 	o
 		.setName('wished_card')
-		.setDescription('Optional: name of a Wished Card. 30% chance it replaces one of the standard (non-guaranteed) pulled cards.')
+		.setDescription('Optional wished card name. 30% chance it replaces a standard pulled card.')
 		.setRequired(false)
 );
 

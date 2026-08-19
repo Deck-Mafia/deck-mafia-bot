@@ -16,6 +16,9 @@ const FALLBACK_CARD = 'DEBUG';
 const EXCLUDED_RARITIES = [-1, -99];
 const PULLABLE_RARITIES = [0, 3, 4, 5, 6];
 
+// Chance that a pack containing a named "Wished Card" actually pulls that card.
+const WISH_CHANCE = 0.3;
+
 export interface DrawnCard {
 	name: string;
 	uri: string;
@@ -75,6 +78,37 @@ function getCardByRarity(
 }
 
 /**
+ * Validate a "Wished Card": it must exist, be public, and be pullable.
+ * Throws a descriptive error otherwise (so the pack is never consumed).
+ */
+async function getPullableWishCard(
+	wishedCardName: string
+): Promise<{ name: string; uri: string; rarity: number }> {
+	const card = await prisma.card.findFirst({
+		where: { name: wishedCardName.toLowerCase() },
+		select: { name: true, uri: true, rarity: true, isPublic: true },
+	});
+
+	if (!card) {
+		throw new Error(
+			`Wished card \`${wishedCardName}\` does not exist in the database. The pack was not opened.`
+		);
+	}
+	if (!card.isPublic) {
+		throw new Error(
+			`Wished card \`${wishedCardName}\` must be public to be wishable. The pack was not opened.`
+		);
+	}
+	if (card.rarity === null || card.rarity === undefined || !PULLABLE_RARITIES.includes(card.rarity)) {
+		throw new Error(
+			`Wished card \`${wishedCardName}\` must be pullable (rarity ${PULLABLE_RARITIES.join(', ')}★). The pack was not opened.`
+		);
+	}
+
+	return { name: card.name, uri: card.uri, rarity: card.rarity };
+}
+
+/**
  * Check if a user has a booster pack in their inventory and consume one.
  * Returns null if no booster pack found, otherwise returns the drawn cards array.
  */
@@ -84,6 +118,7 @@ export async function processOpenPack(
 	openerTag: string,
 	extraSlot: boolean,
 	channelName: string,
+	wishedCardName?: string,
 ): Promise<{ drawnCards: DrawnCard[] } | null> {
 	// 1. Fetch the target user's inventory and find booster packs
 	const inventory = await prisma.inventory.findUnique({
@@ -140,6 +175,20 @@ export async function processOpenPack(
 		}
 	}
 
+	// Wished Card passive: when an admin names a wished card, there is a 30% chance it
+	// replaces one of the NON-guaranteed slots (so it may be any rarity tier, e.g. a 3★).
+	// The guaranteed last slot is never swapped. Validation runs before the DB transaction,
+	// so a rejected wish leaves the pack unconsumed.
+	let wishApplied = false;
+	if (wishedCardName) {
+		const wishCard = await getPullableWishCard(wishedCardName);
+		if (Math.random() < WISH_CHANCE) {
+			const targetSlot = Math.floor(Math.random() * standardSlots); // 0..standardSlots-1, never the guaranteed one
+			drawnCards[targetSlot] = { name: wishCard.name, uri: wishCard.uri, rarity: wishCard.rarity };
+			wishApplied = true;
+		}
+	}
+
 	// 4. Pre-resolve card IDs from names (so the transaction only does writes)
 	const drawnCardIds: { name: string; cardId: string }[] = [];
 	for (const drawn of drawnCards) {
@@ -189,6 +238,9 @@ export async function processOpenPack(
 	const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
 	const lines: string[] = [];
 	lines.push(`[${timestamp}] ${openerTag} opened a booster pack for ${targetTag} | Extra: ${extraSlot ? 'yes' : 'no'} | Channel:#${channelName}`);
+	if (wishedCardName) {
+		lines.push(`  Wish: ${wishedCardName} | Applied: ${wishApplied ? 'yes' : 'no'}`);
+	}
 	for (let idx = 0; idx < drawnCards.length; idx++) {
 		const card = drawnCards[idx];
 		const label = rarityLabelsLog[card.rarity] ?? `${card.rarity}★`;

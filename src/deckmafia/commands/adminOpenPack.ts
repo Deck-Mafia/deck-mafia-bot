@@ -22,6 +22,12 @@ c.addBooleanOption((o) =>
 		.setDescription('Pull 4 standard slots instead of 3 (5 cards total instead of 4)')
 		.setRequired(false)
 );
+c.addStringOption((o) =>
+	o
+		.setName('wished_card')
+		.setDescription('Optional: name of a Wished Card. 30% chance it replaces one of the standard (non-guaranteed) pulled cards.')
+		.setRequired(false)
+);
 
 export default newSlashCommand({
 	data: c,
@@ -40,6 +46,7 @@ export default newSlashCommand({
 
 		const targetUser = i.options.getUser('user', true);
 		const extraSlot = i.options.getBoolean('extra', false) ?? false;
+		const wishedCardName = i.options.getString('wished_card', false) ?? undefined;
 
 		await i.deferReply();
 
@@ -47,7 +54,14 @@ export default newSlashCommand({
 			const targetUserId = targetUser.id;
 			const channelName = (i.channel as TextChannel)?.name ?? 'unknown';
 
-			const result = await processOpenPack(i, targetUserId, i.user.tag, extraSlot, channelName);
+			const result = await processOpenPack(
+				i,
+				targetUserId,
+				i.user.tag,
+				extraSlot,
+				channelName,
+				wishedCardName
+			);
 
 			if (!result) {
 				return i.editReply({
@@ -99,9 +113,9 @@ export default newSlashCommand({
 			await i.editReply({ content: 'Pack opened successfully!', embeds: [embed] });
 		} catch (err) {
 			console.error('[ADMINOPENPACK ERROR]', err);
-			await i.editReply({
-				content: 'An error occurred while opening the booster pack.',
-			});
+			const message =
+				err instanceof Error ? err.message : 'An error occurred while opening the booster pack.';
+			await i.editReply({ content: message });
 		}
 	},
 });
